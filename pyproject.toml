@@ -11,3 +11,6 @@ dependencies = [
 
 [tool.uv.sources]
 multilspy = { path = "projects/multilspy" }
+
+[dependency-groups]
+dev = []

@@ -250,6 +250,9 @@ requires-dist = [
     { name = "multilspy", directory = "projects/multilspy" },
 ]
 
+[package.metadata.requires-dev]
+dev = []
+
 [[package]]
 name = "multilspy"
 version = "0.0.12"
