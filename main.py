@@ -3,9 +3,12 @@ from multilspy.multilspy_config import MultilspyConfig
 from multilspy.multilspy_logger import MultilspyLogger
 import os
 import asyncio
+cwd = os.getcwd()
+
+def get_relative_path(file_path: str) -> str:
+    return os.path.join(cwd, file_path)
 
 async def main():
-    cwd = os.getcwd()
     config = MultilspyConfig.from_dict({"code_language": "python"})
     logger = MultilspyLogger()
     lsp = LanguageServer.create(config, logger, cwd)
@@ -13,12 +16,15 @@ async def main():
     async with lsp.start_server():
         print("LSP started")
 
-        try:
-            result = await lsp.request_definition("main.py", 7, 5)
+        path = get_relative_path("main.py")
+        with lsp.open_file(get_relative_path(path)):
+            result = lsp.get_open_file_text(path)
             print(result)
-        except Exception as e:
-            print(f"Error getting definition: {e}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"Error: {e}")
+        raise e
