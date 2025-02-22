@@ -9,7 +9,9 @@ from mcp.types import (
 import inspect
 import os
 import asyncio
+import logging
 
+logger = logging.getLogger(__name__)
 cwd = os.getcwd()
 
 def get_relative_path(file_path: str) -> str:
@@ -28,15 +30,17 @@ def mcp_tool_from_function(fn: Callable) -> MCPTool:
     )
 
 async def main():
-    config = MultilspyConfig.from_dict({"code_language": "python"})
-    logger = MultilspyLogger()
-    lsp = LanguageServer.create(config, logger, cwd)
+    lsp = LanguageServer.create(
+        MultilspyConfig.from_dict({"code_language": "python"}),
+        MultilspyLogger(),
+        cwd,
+    )
 
     mcp = build_mcp(lsp)
 
-    print("LSP starting...")
+    logger.info("LSP starting...")
     async with lsp.start_server():
-        print("LSP started")
+        logger.info("LSP started")
 
         await mcp.run_stdio_async()
 
@@ -45,5 +49,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         raise e
