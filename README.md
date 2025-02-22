@@ -1,7 +1,11 @@
 # MCP LSP POC
 ## The ABCs (Introduction)
 ### What is an MCP?
+* [MCP](https://modelcontextprotocol.io/) - Documentation
+* [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) - MCP Server Python Library
 ### What is an LSP?
+* [LSP](https://microsoft.github.io/language-server-protocol/) - Documentation
+* [multilspy](https://github.com/microsoft/multilspy) - LSP Python Client Library
 ## Development
 ### Dependencies
 * [uv](https://docs.astral.sh/uv/)
