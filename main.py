@@ -19,15 +19,15 @@ def get_relative_path(file_path: str) -> str:
 
 def build_mcp(lsp: LanguageServer) -> FastMCP:
     mcp = FastMCP("lsp")
-    mcp.add_tool(lsp.request_document_symbols)
+    add_tool(mcp, lsp.request_document_symbols)
+    add_tool(mcp, lsp.request_definition)
+    add_tool(mcp, lsp.request_references)
+    add_tool(mcp, lsp.request_completions)
+    add_tool(mcp, lsp.request_hover)
     return mcp
 
-def mcp_tool_from_function(fn: Callable) -> MCPTool:
-    return MCPTool(
-        fn=fn,
-        name=fn.__name__,
-        description=inspect.getdoc(fn),
-    )
+def add_tool(mcp: FastMCP, fn: Callable) -> MCPTool:
+    mcp.add_tool(fn=fn, name="lsp_" + fn.__name__, description=inspect.getdoc(fn))
 
 async def main():
     lsp = LanguageServer.create(
