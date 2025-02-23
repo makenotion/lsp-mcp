@@ -1,4 +1,7 @@
 # LSP MCP
+## Warning
+This is in a POC state. Do not use for any real work.
+
 ## The ABCs (Introduction)
 ### What is an MCP?
 * [MCP](https://modelcontextprotocol.io/) - Documentation
