@@ -1,4 +1,4 @@
-# LSP MCP POC
+# LSP MCP
 ## The ABCs (Introduction)
 ### What is an MCP?
 * [MCP](https://modelcontextprotocol.io/) - Documentation
