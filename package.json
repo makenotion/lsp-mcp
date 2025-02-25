@@ -23,11 +23,16 @@
     "dev": "ts-node src/index.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
-    "test": "jest"
+    "test": "jest",
+
+    "mcp-cli": "npx @wong2/mcp-cli --config dev/mcp_config.json",
+    "mcp-cli:simple": "npx @wong2/mcp-cli --config dev/mcp_config_simple.json",
+    "dev:simple": "yarn dev --methods textDocument/documentSymbol"
   },
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^11.9.1",
     "@modelcontextprotocol/sdk": "^1.5.0",
+    "commander": "^13.1.0",
     "vscode-languageserver-protocol": "^3.17.5"
   }
 }

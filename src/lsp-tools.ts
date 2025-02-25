@@ -55,7 +55,7 @@ async function openFile(lsp: LspClient, file: string, uri: string): Promise<void
 let tools: Tool[] | undefined = undefined;
 
 export async function getTools(
-  whitelistIds: string[] | undefined = undefined
+  methodIds: string[] | undefined = undefined
 ): Promise<Tool[]> {
   // technically this could do work twice if it's called asynchronously, but it's not a big deal
   if (tools !== undefined) {
@@ -85,7 +85,7 @@ export async function getTools(
     return acc
   });
  
-  const toolIds = whitelistIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
+  const toolIds = methodIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
  
   tools = toolIds.map((id) => {
     const definition = dereferencedLookup[id]

@@ -6,10 +6,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { getTools } from "./lsp-tools";
 import { nullLogger } from "./logger";
+import { Command } from "commander";
 
-async function main() {
-  // const tools = await getTools(['textDocument/documentSymbol']);
-  const tools = await getTools();
+
+async function main(methods: string[] | undefined = undefined) {
+  const tools = await getTools(methods);
 
   const lsp = await startLsp("sh", [
     "-c",
@@ -53,4 +54,15 @@ async function main() {
   await startMcp(mcp);
 }
 
-main();
+const program = new Command();
+
+program
+  .name("lsp-mcp")
+  .description("A tool for providing LSP requests to MCP")
+  .version("0.1.0")
+  .option("-m, --methods <string...>", "LSP methods to enabled (Default: all)")
+  .parse(process.argv);
+
+const options = program.opts();
+
+main(options.methods);
