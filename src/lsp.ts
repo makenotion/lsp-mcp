@@ -57,11 +57,13 @@ class LspClientImpl implements LspClient {
 
     connection.listen();
 
+    // TODO: We should figure out how to specify the capabilities we want
+    const capabilities: protocol.ClientCapabilities = {};
+
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
       rootUri: buildUri('/'),
-      capabilities: {
-      },
+      capabilities: capabilities,
     });
 
     logger.info(`Server LSP capabilities: ${JSON.stringify(response.capabilities, null, 2)}`);
