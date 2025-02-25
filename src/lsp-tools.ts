@@ -62,12 +62,15 @@ export async function getTools(
     return tools;
   }
 
-  const metaModelString = await fs.readFile("dev/metaModel.json", "utf8");
+  const metaModelString = await fs.readFile(
+    path.join(__dirname, "resources", "metaModel.json"),
+    "utf8"
+  );
   const metaModel = JSON.parse(metaModelString) as MetaModel;
   const metaModelLookup = new Map(metaModel.requests.map((request) => [request.method, request]))
 
   const parser = new $RefParser()
-  const schema = await parser.parse("./dev/generated.protocol.schema.json")
+  const schema = await parser.parse(path.join(__dirname,"./resources/generated.protocol.schema.json"))
 
   const dereferenced = await parser.dereference(schema, {
     mutateInputSchema: false,
