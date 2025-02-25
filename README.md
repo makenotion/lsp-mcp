@@ -51,7 +51,10 @@ This is a classic example of variable shadowing in JavaScript/TypeScript, where 
 This is in a POC state.
 
 ## Quick Start
-### Claude AI
+### Claude Desktop
+
+Note: Claude Desktop is finicky with npx it seems. Sometimes it says the mcp fails but the tools still work. I'll look into this... later 😊
+
 Modify `claude_desktop_config.json` (As described in the [MCP Docs](https://modelcontextprotocol.io/quickstart/user#2-add-the-filesystem-mcp-server)) with the following:
 ```
 {
