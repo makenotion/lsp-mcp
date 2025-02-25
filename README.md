@@ -1,6 +1,8 @@
 # LSP MCP
+An Model Context Protocol (MCP) server that provides LLMs/AI Agents with the capabilities of a language server protocol (LSP) server. This gives the AI the ability to get language aware context from the codebase.
+
 ## Warning
-This is in a POC state. Do not use for any real work.
+This is in a POC state.
 
 ## Quick Start
 ### Claude AI
@@ -32,11 +34,12 @@ Follow the instructions for Claude but the config file is located in `~/.llm/con
 * [LSP](https://microsoft.github.io/language-server-protocol/) - Documentation
 * [multilspy](https://github.com/microsoft/multilspy) - LSP Python Client Library
 ## Development
+```bash
+yarn
+yarn mcp-cli # Interactive MCP tool to help with development
+yarn dev --help # Get the CLI help
+```
 ### Dependencies
-* [uv](https://docs.astral.sh/uv/)
-### Running
-### Testing
-### Debugging
 ### Decisions
 * ~~Using python - I want to leverage a client library that makes the startup of this simple. A lot of LSPs are created in node, but the mature client libraries seem to be dependent on vscode. I like the look of [multilspy](https://github.com/microsoft/multilspy), so we'll start with python. It helps that I already created a python MCP, so at least I'll have a leg up there~~
 * ~~[uv](https://docs.astral.sh/uv/)  for package management and such - I've been seeing this used more frequently lately and this is an excuse to learn it. Switching package managers in the future is annoying but doable. I may have to revisit this decision once implementing CI/CD. Maybe I can use this instead of a dependency on [taskfile](https://taskfile.dev/) as well? TBD~~
