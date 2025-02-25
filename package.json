@@ -27,7 +27,7 @@
     "typescript-language-server": "^4.3.3"
   },
   "scripts": {
-    "build": "tsc && rimraf dist/resources && cp -R resources dist/",
+    "build": "tsc && rimraf dist/resources && cp -R src/resources dist/",
     "prepare": "yarn build",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",

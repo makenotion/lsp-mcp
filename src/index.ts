@@ -13,11 +13,12 @@ import path from "path";
 
 async function main(methods: string[] | undefined = undefined, lspCommand: string, verbose: boolean) {
   const tools = await getTools(methods);
+  const logger = verbose ? consoleLogger : nullLogger;
 
   const lsp = await startLsp("sh", [
     "-c",
     lspCommand
-  ], verbose ? consoleLogger : nullLogger);
+  ], logger);
 
   const toolLookup = new Map(tools.map((tool) => [tool.name, tool]));
 

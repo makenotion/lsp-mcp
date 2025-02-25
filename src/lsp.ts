@@ -3,6 +3,7 @@ import * as rpc from "vscode-jsonrpc";
 import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { InitializeRequest } from "vscode-languageserver-protocol";
 import * as protocol from "vscode-languageserver-protocol";
+import { ClientCapabilities } from "vscode-languageserver-protocol/lib/common/protocol";
 import { consoleLogger } from "./logger";
 import { Logger } from "vscode-jsonrpc";
 import path from "path";
@@ -59,8 +60,12 @@ class LspClientImpl implements LspClient {
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
       rootUri: buildUri('/'),
-      capabilities: {},
+      capabilities: {
+        "foo": "bar"
+      } as any,
     });
+
+    logger.info(`Server LSP capabilities: ${JSON.stringify(response.capabilities, null, 2)}`);
 
     return new LspClientImpl(
       childProcess,

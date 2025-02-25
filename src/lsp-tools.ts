@@ -22,6 +22,7 @@ const toolBlacklist = [
 ];
 
 interface Tool extends MCPTool {
+  methodId: string;
   handler: (lsp: LspClient, args: Record<string, unknown>) => Promise<any>;
 }
 
@@ -108,6 +109,7 @@ export async function getTools(
     }
 
     return {
+      methodId: id,
       name: id.replace("/", "_"), // slash is not valid in tool names
       description: `method: ${id}\n${metaModelLookup.get(id)?.documentation ?? ""}`,
       inputSchema: inputSchema,
