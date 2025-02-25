@@ -61,8 +61,7 @@ class LspClientImpl implements LspClient {
       processId: process.pid,
       rootUri: buildUri('/'),
       capabilities: {
-        "foo": "bar"
-      } as any,
+      },
     });
 
     logger.info(`Server LSP capabilities: ${JSON.stringify(response.capabilities, null, 2)}`);
