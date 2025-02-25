@@ -12,7 +12,7 @@ Modify `claude_desktop_config.json` (As described in the [MCP Docs](https://mode
   "mcpServers": {
     "lsp": {
       "command": "npx",
-      "args": ["-y", "git+https://github.com/jonrad/lsp-mcp", "--lsp", "npx -y -p 'typescript@5.7.3' -p 'typescript-language-server@4.3.3' typescript-language-server --stdio"]
+      "args": ["-y", "--silent", "git+https://github.com/jonrad/lsp-mcp", "--lsp", "npx -y --silent -p 'typescript@5.7.3' -p 'typescript-language-server@4.3.3' typescript-language-server --stdio"]
     }
   }
 }
