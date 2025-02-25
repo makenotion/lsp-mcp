@@ -1,4 +1,5 @@
 import { JSONSchema4 } from "json-schema";
+import { Logger } from "vscode-languageserver-protocol";
 
 export interface Tool {
   id: string;
@@ -10,7 +11,10 @@ export interface Tool {
 export class ToolManager {
   private toolsById: Map<string, Tool> = new Map();
 
+  constructor(private readonly logger: Logger) {}
+
   public registerTool(tool: Tool): void {
+    this.logger.info(`Registering tool ${tool.id}`);
     this.toolsById.set(tool.id, tool);
   }
 

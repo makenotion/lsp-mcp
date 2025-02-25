@@ -74,23 +74,15 @@ export async function lspMethodHandler(methodId: string, lsp: LspClient, args: R
   return await lsp.sendRequest(methodId, lspArgs);
 };
 
-let methods: LSPMethods[] | undefined = undefined;
-
-export async function getLspMethods(
-  methodIds: string[] | undefined = undefined
-): Promise<LSPMethods[]> {
-  // technically this could do work twice if it's called asynchronously, but it's not a big deal
-  if (methods !== undefined) {
-    return methods;
-  }
-
+async function getMetaModel() {
   const metaModelString = await fs.readFile(
     path.join(__dirname, "resources", "metaModel.json"),
     "utf8"
   );
-  const metaModel = JSON.parse(metaModelString) as MetaModel;
-  const metaModelLookup = new Map(metaModel.requests.map((request) => [request.method, request]))
+  return JSON.parse(metaModelString) as MetaModel;
+}
 
+async function getDereferencedJsonSchema() {
   const parser = new $RefParser()
   const schema = await parser.parse(path.join(__dirname,"./resources/generated.protocol.schema.json"))
 
@@ -102,11 +94,29 @@ export async function getLspMethods(
     throw new Error("No definitions")
   }
 
-  const dereferencedLookup: Record<string, JSONSchema4> = Object.values(dereferenced.definitions).reduce((acc: Record<string, JSONSchema4>, definition) => {
+  return dereferenced as { definitions: Record<string, JSONSchema4> };
+}
+
+let methods: LSPMethods[] | undefined = undefined;
+
+export async function getLspMethods(
+  methodIds: string[] | undefined = undefined
+): Promise<LSPMethods[]> {
+  // technically this could do work twice if it's called asynchronously, but it's not a big deal
+  if (methods !== undefined) {
+    return methods;
+  }
+
+  const metaModel = await getMetaModel();
+  const metaModelLookup = new Map(metaModel.requests.map((request) => [request.method, request]))
+
+  const jsonSchema = await getDereferencedJsonSchema();
+
+  const dereferencedLookup: Record<string, JSONSchema4> = Object.values(jsonSchema.definitions).reduce((acc: Record<string, JSONSchema4>, definition) => {
     if (definition.properties?.method?.enum?.length !== 1) {
       return acc
     }
-    acc[definition.properties.method.enum[0]] = definition
+    acc[String(definition.properties.method.enum[0])] = definition
     return acc
   });
 

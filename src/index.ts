@@ -14,7 +14,7 @@ import { ToolManager } from "./tool-manager";
 async function main(methods: string[] | undefined = undefined, lspCommand: string, verbose: boolean) {
   const logger = verbose ? consoleLogger : nullLogger;
 
-  const toolManager = new ToolManager();
+  const toolManager = new ToolManager(logger);
   const lspMethods = await getLspMethods(methods);
 
   const lsp = await startLsp("sh", [
