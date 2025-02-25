@@ -16,3 +16,8 @@ FROM node:20
 WORKDIR /app
 COPY --from=builder /app/dist /app
 COPY --from=builder /app/node_modules /app/node_modules
+
+# typescript language server
+RUN npm install -g typescript && npm install -g typescript-language-server
+
+ENTRYPOINT ["node", "index.js", "--lsp", "typescript-language-server --stdio"]

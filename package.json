@@ -28,6 +28,7 @@
   },
   "scripts": {
     "build": "tsc && rimraf dist/resources && cp -R src/resources dist/",
+    "build:docker": "docker build . -t jonrad/lsp-mcp",
     "prepare": "yarn build",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
@@ -37,6 +38,7 @@
     "mcp-cli": "npx @wong2/mcp-cli --config dev/mcp_config.json",
     "mcp-cli:simple": "npx @wong2/mcp-cli --config dev/mcp_config_simple.json",
     "mcp-cli:prod": "npx @wong2/mcp-cli --config dev/mcp_config_prod.json",
+    "mcp-cli:docker": "npx @wong2/mcp-cli --config dev/mcp_config_docker.json",
     "dev:simple": "yarn dev --methods textDocument/documentSymbol"
   },
   "dependencies": {

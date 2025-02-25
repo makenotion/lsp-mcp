@@ -53,10 +53,26 @@ This is in a POC state.
 ## Quick Start
 ### Claude Desktop
 
-Note: Claude Desktop is finicky with npx it seems. Sometimes it says the mcp fails but the tools still work. I'll look into this... later 😊
+#### Using Docker (Recommended)
 
 Modify `claude_desktop_config.json` (As described in the [MCP Docs](https://modelcontextprotocol.io/quickstart/user#2-add-the-filesystem-mcp-server)) with the following:
+```json
+{
+  "mcpServers": {
+    "lsp": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "docker.io/jonrad/lsp-mcp:0.1.0"]
+    }
+  }
+}
 ```
+
+You'll likely want to share some files with the container by passing docker `-v /local_dir:/remote_dir`. Then you can ask Claude about the files in `/remote_dir/<filename>`.
+
+#### Using npx
+Note: Claude Desktop is finicky with npx it seems. Sometimes it says the mcp fails but the tools still work. I'll look into this... later 😊
+
+```json
 {
   "mcpServers": {
     "lsp": {
@@ -99,12 +115,12 @@ yarn dev --help # Get the CLI help
 ### Roadmap
 This is just a list of things I'd like to do eventually. There is no timeline or order for these.
 * Multiple LSPs at the same time
-* Docker image with all the LSPs pre-installed
 * Figure out how to sync capabilities between the LSP client (this) and the LSP server
 * Auto generated the LSP JSON Schema or find where it's published
 * Make json schema a cli argument so we don't have the update code to support new ones
 * Connect to an already running LSP server (via a multiplexing LSP server?)
 * Switch to (Taskfile)[https://taskfile.dev/]
+* Create a proper release process
 
 ## References
 * [Generated LSP JSON Schema](https://gist.github.com/bollwyvl/7a128978b8ae89ab02bbd5b84d07a4b7#file-generated-protocol-schema-json)
