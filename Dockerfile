@@ -9,5 +9,3 @@ FROM node:20
 WORKDIR /app
 COPY --from=builder /app/dist /app
 COPY --from=builder /app/node_modules /app/node_modules
-
-#RUN npx
