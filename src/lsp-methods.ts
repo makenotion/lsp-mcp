@@ -100,7 +100,7 @@ async function getDereferencedJsonSchema() {
 let methods: LSPMethods[] | undefined = undefined;
 
 export async function getLspMethods(
-  methodIds: string[] | undefined = undefined
+  allowedMethodIds: string[] | undefined = undefined
 ): Promise<LSPMethods[]> {
   // technically this could do work twice if it's called asynchronously, but it's not a big deal
   if (methods !== undefined) {
@@ -111,19 +111,19 @@ export async function getLspMethods(
   const metaModelLookup = new Map(metaModel.requests.map((request) => [request.method, request]))
 
   const jsonSchema = await getDereferencedJsonSchema();
+  const jsonSchemaLookup = new Map(
+    Object.values(jsonSchema.definitions)
+      .filter(definition => definition.properties?.method?.enum?.length === 1)
+      .map(definition => [
+        String(definition.properties?.method?.enum?.[0]),
+        definition
+      ])
+  );
 
-  const dereferencedLookup: Record<string, JSONSchema4> = Object.values(jsonSchema.definitions).reduce((acc: Record<string, JSONSchema4>, definition) => {
-    if (definition.properties?.method?.enum?.length !== 1) {
-      return acc
-    }
-    acc[String(definition.properties.method.enum[0])] = definition
-    return acc
-  });
+  const methodIds = allowedMethodIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
 
-  const toolIds = methodIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
-
-  methods = toolIds.map((id) => {
-    const definition = dereferencedLookup[id]
+  methods = methodIds.map((id) => {
+    const definition = jsonSchemaLookup.get(id)
     // TODO: Because I've sourced the jsonapi and the metamodel from different sources, they aren't always in sync.
     // In the case when I don't have a jsonschema, I'll just skip for now
     if (!definition?.properties) {
