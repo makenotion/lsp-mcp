@@ -1,6 +1,52 @@
 # LSP MCP
 An Model Context Protocol (MCP) server that provides LLMs/AI Agents with the capabilities of a language server protocol (LSP) server. This gives the AI the ability to get language aware context from the codebase.
 
+### Example
+
+**Input:**
+```
+Use lsp to give me insights into the following typescript code:
+
+let foo = "bar";
+function x() {
+  let foo = 123;
+  console.log(foo);
+}
+x();
+console.log(foo);
+```
+
+**Output:**
+```
+I'll use LSP (Language Server Protocol) to analyze your TypeScript code. Let me break down what's happening:
+Here's what the code does and the insights from LSP analysis:
+
+1. Variable Shadowing:
+
+There are two variables named foo:
+
+A global foo (string type) initialized with the value "bar"
+A local foo (number type) inside the function x() initialized with the value 123
+
+2. Execution Flow:
+
+First, the global foo is declared and assigned the value "bar"
+When function x() is called, the local foo variable is declared and assigned 123
+The console.log(foo) inside the function outputs 123 (the local variable)
+After the function finishes, console.log(foo) outputs "bar" (the global variable)
+
+3. Scope Isolation:
+
+The LSP confirms that TypeScript correctly identifies the different types:
+
+The global foo is a string type
+The local foo inside the function is a number type
+
+Changes to the local foo don't affect the global foo
+
+This is a classic example of variable shadowing in JavaScript/TypeScript, where a local variable with the same name as a global variable takes precedence within its scope.
+```
+
 ## Warning
 This is in a POC state.
 
