@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "lsp": {
+      "command": "npx",
+      "args": ["-y", "git+https://github.com/jonrad/lsp-mcp", "--lsp", "npx -y -p typescript typescript-language-server --stdio"]
+    }
+  }
+}
