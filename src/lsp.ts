@@ -10,7 +10,6 @@ import path from "path";
 const URI_SCHEME = "lsp";
 
 export interface LspClient {
-  readonly connection: rpc.MessageConnection;
   dispose: () => void;
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
@@ -63,13 +62,19 @@ class LspClientImpl implements LspClient {
       capabilities: {},
     });
 
-    return new LspClientImpl(childProcess, connection, response.capabilities);
+    return new LspClientImpl(
+      childProcess,
+      connection,
+      response.capabilities,
+      logger,
+    );
   }
 
   private constructor(
     private readonly childProcess: ChildProcess,
-    readonly connection: rpc.MessageConnection, // TODO: make this private
+    private readonly connection: rpc.MessageConnection,
     private readonly capabilities: protocol.ServerCapabilities, // TODO: not sure what I'm doing with this, but it'll be needed I feel like
+    private readonly logger: Logger, // TODO: better long term solution for logging
   ) {}
 
   sendRequest(method: string, args: any): Promise<any> {
@@ -81,7 +86,11 @@ class LspClientImpl implements LspClient {
   }
 
   dispose() {
-    this.connection.dispose();
-    this.childProcess.kill();
+    try {
+      this.connection.dispose();
+      this.childProcess.kill();
+    } catch (e: any) {
+      this.logger.error(e.toString?.());
+    }
   }
 }

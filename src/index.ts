@@ -8,6 +8,7 @@ import { getTools } from "./lsp-tools";
 import { nullLogger } from "./logger";
 
 async function main() {
+  // const tools = await getTools(['textDocument/documentSymbol']);
   const tools = await getTools();
 
   const lsp = await startLsp("sh", [
@@ -18,6 +19,7 @@ async function main() {
   const toolLookup = new Map(tools.map((tool) => [tool.name, tool]));
 
   const mcp = createMcp();
+
   mcp.setRequestHandler(ListToolsRequestSchema, async () => {
     const mcpTools = tools.map((tool) => ({
       name: tool.name,
@@ -31,18 +33,18 @@ async function main() {
   });
 
   mcp.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params
+    const { name, arguments: args } = request.params;
     if (!args) {
-      throw new Error("No arguments")
+      throw new Error("No arguments");
     }
-   
-    const tool = toolLookup.get(name)
+
+    const tool = toolLookup.get(name);
     if (!tool) {
-      throw new Error("Unknown tool")
+      throw new Error("Unknown tool");
     }
-   
-    const result = await tool.handler(lsp, args)
-   
+
+    const result = await tool.handler(lsp, args);
+
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };

@@ -6,17 +6,40 @@ import { LspClient } from "./lsp";
 import $RefParser from "@apidevtools/json-schema-ref-parser";
 import { JSONSchema4 } from "json-schema";
 import { MetaModel } from "./metaModel";
+
+// List of LSP requests that we do not want to expose
+const toolBlacklist = [
+  // These are handled by this program
+  "initialize",
+  "shutdown",
+
+  // Useless for MCP
+  "client/registerCapability",
+  "client/unregisterCapability",
+
+  // TODO: Can we handle this? typescript lsp doesn't support it
+  "workspace/workspaceFolders",
+];
+
 interface Tool extends MCPTool {
   handler: (lsp: LspClient, args: Record<string, unknown>) => Promise<any>;
 }
 
-const URI_SCHEME = "file";
-function buildUri(...paths: string[]) {
-  return `${URI_SCHEME}://` + path.resolve(...paths);
+// expects a resolved path
+function pathToUri(path: string) {
+  return `file://${path}`
 }
-  
-async function openFile(lsp: LspClient, file: string): Promise<string> {
-  const uri = buildUri(file)
+
+// This function exists in the url module, but is too finicky for us to trust
+function uriToPath(uri: string) {
+  if (uri.startsWith("file://")) {
+    return path.resolve(uri.slice(7));
+  }
+
+  return path.resolve(uri);
+}
+ 
+async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
   const contents = await fs.readFile(file, "utf8");
 
   await lsp.sendNotification(protocol.DidOpenTextDocumentNotification.method, {
@@ -27,13 +50,13 @@ async function openFile(lsp: LspClient, file: string): Promise<string> {
       text: contents,
     },
   });
-  
-  return uri
 }
 
 let tools: Tool[] | undefined = undefined;
 
-export async function getTools(): Promise<Tool[]> {
+export async function getTools(
+  whitelistIds: string[] | undefined = undefined
+): Promise<Tool[]> {
   // technically this could do work twice if it's called asynchronously, but it's not a big deal
   if (tools !== undefined) {
     return tools;
@@ -53,7 +76,7 @@ export async function getTools(): Promise<Tool[]> {
   if (!dereferenced.definitions) {
     throw new Error("No definitions")
   }
-  
+ 
   const dereferencedLookup: Record<string, JSONSchema4> = Object.values(dereferenced.definitions).reduce((acc: Record<string, JSONSchema4>, definition) => {
     if (definition.properties?.method?.enum?.length !== 1) {
       return acc
@@ -61,9 +84,9 @@ export async function getTools(): Promise<Tool[]> {
     acc[definition.properties.method.enum[0]] = definition
     return acc
   });
-  
-  const toolIds = metaModel.requests.map((request) => request.method)
-  
+ 
+  const toolIds = whitelistIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
+ 
   tools = toolIds.map((id) => {
     const definition = dereferencedLookup[id]
     // TODO: Because I've sourced the jsonapi and the metamodel from different sources, they aren't always in sync.
@@ -88,16 +111,17 @@ export async function getTools(): Promise<Tool[]> {
       handler: async (lsp: LspClient, args: Record<string, any>) => {
         const lspArgs = { ...args }
         if (lspArgs.textDocument?.uri) {
-          const file = lspArgs.textDocument.uri
+          const file = uriToPath(lspArgs.textDocument.uri)
+          const uri = pathToUri(file)
           // TODO: decide how to close the file. Timeout I think is the best option?
-          const uri = await openFile(lsp, file)
+          await openFile(lsp, file, uri)
           lspArgs.textDocument = { ...lspArgs.textDocument, uri }
         }
-        
+       
         return await lsp.sendRequest(id, lspArgs);
       },
     }
   }).filter((tool) => tool !== undefined);
-  
+ 
   return tools
 }
