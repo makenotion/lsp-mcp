@@ -1,4 +1,3 @@
-import { Tool as MCPTool } from "@modelcontextprotocol/sdk/types.js";
 import * as protocol from "vscode-languageserver-protocol";
 import * as path from "path";
 import * as fs from "fs/promises";
@@ -13,7 +12,7 @@ const toolBlacklist = [
   "initialize",
   "shutdown",
 
-  // Useless for MCP
+  // Useless for MCP?
   "client/registerCapability",
   "client/unregisterCapability",
 
@@ -21,18 +20,19 @@ const toolBlacklist = [
   "workspace/workspaceFolders",
 ];
 
-interface Tool extends MCPTool {
-  methodId: string;
-  handler: (lsp: LspClient, args: Record<string, unknown>) => Promise<any>;
+export interface LSPMethods {
+  id: string;
+  description: string;
+  inputSchema: JSONSchema4;
 }
 
-// expects a resolved path
-function pathToUri(path: string) {
+// Converts /path/to/file to file:///path/to/file
+function pathToFileUri(path: string): string {
   return `file://${path}`
 }
 
-// This function exists in the url module, but is too finicky for us to trust
-function uriToPath(uri: string) {
+// convert file:///path/to/file to /path/to/file
+function fileUriToPath(uri: string): string {
   if (uri.startsWith("file://")) {
     return path.resolve(uri.slice(7));
   }
@@ -40,9 +40,8 @@ function uriToPath(uri: string) {
   return path.resolve(uri);
 }
 
-async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
-  const contents = await fs.readFile(file, "utf8");
-
+// Let's the LSP know about a file contents
+export async function openFileContents(lsp: LspClient, uri: string, contents: string): Promise<void> {
   await lsp.sendNotification(protocol.DidOpenTextDocumentNotification.method, {
     textDocument: {
       uri: uri,
@@ -53,14 +52,36 @@ async function openFile(lsp: LspClient, file: string, uri: string): Promise<void
   });
 }
 
-let tools: Tool[] | undefined = undefined;
+// Let's the LSP know about a file
+async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
+  const contents = await fs.readFile(file, "utf8");
+  await openFileContents(lsp, uri, contents);
+}
 
-export async function getTools(
+export async function lspMethodHandler(methodId: string, lsp: LspClient, args: Record<string, any>): Promise<string> {
+  const lspArgs = { ...args };
+  // For uris, we need to tell the LSP about the file contents
+  // This helper makes the LLM's work easier (and less likely to break) by not requiring the LLM to have to handle opening files itself
+  // However, don't handle mem:// files as they are special in that they are not actual files on disk
+  if (lspArgs.textDocument?.uri && !lspArgs.textDocument.uri.startsWith("mem://")) {
+    const file = fileUriToPath(lspArgs.textDocument.uri);
+    const uri = pathToFileUri(file);
+    // TODO: decide how to close the file. Timeout I think is the best option?
+    await openFile(lsp, file, uri);
+    lspArgs.textDocument = { ...lspArgs.textDocument, uri };
+  }
+
+  return await lsp.sendRequest(methodId, lspArgs);
+};
+
+let methods: LSPMethods[] | undefined = undefined;
+
+export async function getLspMethods(
   methodIds: string[] | undefined = undefined
-): Promise<Tool[]> {
+): Promise<LSPMethods[]> {
   // technically this could do work twice if it's called asynchronously, but it's not a big deal
-  if (tools !== undefined) {
-    return tools;
+  if (methods !== undefined) {
+    return methods;
   }
 
   const metaModelString = await fs.readFile(
@@ -91,7 +112,7 @@ export async function getTools(
 
   const toolIds = methodIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
 
-  tools = toolIds.map((id) => {
+  methods = toolIds.map((id) => {
     const definition = dereferencedLookup[id]
     // TODO: Because I've sourced the jsonapi and the metamodel from different sources, they aren't always in sync.
     // In the case when I don't have a jsonschema, I'll just skip for now
@@ -101,7 +122,7 @@ export async function getTools(
 
     // TODO: Not sure if this is the best way to handle this
     // But this occurs when the jsonschema has no param properties
-    let inputSchema = definition.properties.params as any
+    let inputSchema = definition.properties.params
     if (!inputSchema || !inputSchema.type) {
       inputSchema = {
         type: 'object' as 'object',
@@ -109,26 +130,11 @@ export async function getTools(
     }
 
     return {
-      methodId: id,
-      name: id.replace("/", "_"), // slash is not valid in tool names
+      id: id,
       description: `method: ${id}\n${metaModelLookup.get(id)?.documentation ?? ""}`,
       inputSchema: inputSchema,
-      handler: async (lsp: LspClient, args: Record<string, any>) => {
-        const lspArgs = { ...args }
-        if (lspArgs.textDocument?.uri) {
-          if (!lspArgs.textDocument.uri.startsWith("mem://")) {
-            const file = uriToPath(lspArgs.textDocument.uri)
-            const uri = pathToUri(file)
-            // TODO: decide how to close the file. Timeout I think is the best option?
-            await openFile(lsp, file, uri)
-            lspArgs.textDocument = { ...lspArgs.textDocument, uri }
-          }
-        }
-
-        return await lsp.sendRequest(id, lspArgs);
-      },
     }
   }).filter((tool) => tool !== undefined);
 
-  return tools
+  return methods
 }
