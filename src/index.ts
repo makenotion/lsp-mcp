@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import * as protocol from "vscode-languageserver-protocol";
 import { startLsp } from "./lsp";
 import { startMcp, createMcp } from "./mcp";
 import {
@@ -9,10 +10,38 @@ import {
 import { getTools } from "./lsp-tools";
 import { nullLogger, consoleLogger } from "./logger";
 import { Command } from "commander";
-import path from "path";
 
 async function main(methods: string[] | undefined = undefined, lspCommand: string, verbose: boolean) {
   const tools = await getTools(methods);
+  tools.push({
+    methodId: "foo",
+    name: "file_contents_to_uri",
+    description: "Creates a URI given some file contents to be used in the LSP methods that require a URI",
+    inputSchema: {
+      type: "object" as 'object',
+      properties: {
+        file_contents: {
+          type: "string",
+          description: "The contents of the file"
+        }
+      }
+    },
+    handler: async (lsp, args) => {
+      const { file_contents } = args;
+      const uri = `mem://${Math.random().toString(36).substring(2, 15)}`;
+
+      await lsp.sendNotification(protocol.DidOpenTextDocumentNotification.method, {
+        textDocument: {
+          uri: uri,
+          languageId: "typescript",
+          version: 1,
+          text: file_contents,
+        },
+      });
+
+      return uri;
+    }
+  })
   const logger = verbose ? consoleLogger : nullLogger;
 
   const lsp = await startLsp("sh", [

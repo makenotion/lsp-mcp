@@ -39,7 +39,7 @@ function uriToPath(uri: string) {
 
   return path.resolve(uri);
 }
- 
+
 async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
   const contents = await fs.readFile(file, "utf8");
 
@@ -80,7 +80,7 @@ export async function getTools(
   if (!dereferenced.definitions) {
     throw new Error("No definitions")
   }
- 
+
   const dereferencedLookup: Record<string, JSONSchema4> = Object.values(dereferenced.definitions).reduce((acc: Record<string, JSONSchema4>, definition) => {
     if (definition.properties?.method?.enum?.length !== 1) {
       return acc
@@ -88,9 +88,9 @@ export async function getTools(
     acc[definition.properties.method.enum[0]] = definition
     return acc
   });
- 
+
   const toolIds = methodIds ?? metaModel.requests.map((request) => request.method).filter((id) => !toolBlacklist.includes(id));
- 
+
   tools = toolIds.map((id) => {
     const definition = dereferencedLookup[id]
     // TODO: Because I've sourced the jsonapi and the metamodel from different sources, they aren't always in sync.
@@ -116,17 +116,19 @@ export async function getTools(
       handler: async (lsp: LspClient, args: Record<string, any>) => {
         const lspArgs = { ...args }
         if (lspArgs.textDocument?.uri) {
-          const file = uriToPath(lspArgs.textDocument.uri)
-          const uri = pathToUri(file)
-          // TODO: decide how to close the file. Timeout I think is the best option?
-          await openFile(lsp, file, uri)
-          lspArgs.textDocument = { ...lspArgs.textDocument, uri }
+          if (!lspArgs.textDocument.uri.startsWith("mem://")) {
+            const file = uriToPath(lspArgs.textDocument.uri)
+            const uri = pathToUri(file)
+            // TODO: decide how to close the file. Timeout I think is the best option?
+            await openFile(lsp, file, uri)
+            lspArgs.textDocument = { ...lspArgs.textDocument, uri }
+          }
         }
-       
+
         return await lsp.sendRequest(id, lspArgs);
       },
     }
   }).filter((tool) => tool !== undefined);
- 
+
   return tools
 }
