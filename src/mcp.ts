@@ -2,7 +2,7 @@ import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 // Create an MCP server
-export function createMcp() {
+export function createMcp(): McpServer {
   return new McpServer(
     {
       name: "LSP",
