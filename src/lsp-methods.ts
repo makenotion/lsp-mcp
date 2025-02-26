@@ -4,7 +4,7 @@ import * as fs from "fs/promises";
 import { LspClient } from "./lsp";
 import $RefParser from "@apidevtools/json-schema-ref-parser";
 import { JSONSchema4 } from "json-schema";
-import { MetaModel } from "./metaModel";
+import { MetaModel } from "./3rdparty/metaModel";
 
 // List of LSP requests that we do not want to expose
 const toolBlacklist = [
