@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "lsp": {
-      "command": "sh",
-      "args": ["-c", "yarn dev:simple | tee mcp.log"]
-    }
-  }
-}

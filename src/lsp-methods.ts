@@ -58,8 +58,8 @@ async function openFile(lsp: LspClient, file: string, uri: string): Promise<void
   await openFileContents(lsp, uri, contents);
 }
 
-export async function lspMethodHandler(methodId: string, lsp: LspClient, args: Record<string, any>): Promise<string> {
-  const lspArgs = { ...args };
+export async function lspMethodHandler(lsp: LspClient, methodId: string, args: Record<string, any>): Promise<string> {
+  let lspArgs = args;
   // For uris, we need to tell the LSP about the file contents
   // This helper makes the LLM's work easier (and less likely to break) by not requiring the LLM to have to handle opening files itself
   // However, don't handle mem:// files as they are special in that they are not actual files on disk
@@ -68,7 +68,7 @@ export async function lspMethodHandler(methodId: string, lsp: LspClient, args: R
     const uri = pathToFileUri(file);
     // TODO: decide how to close the file. Timeout I think is the best option?
     await openFile(lsp, file, uri);
-    lspArgs.textDocument = { ...lspArgs.textDocument, uri };
+    lspArgs = { ...lspArgs, textDocument: { ...lspArgs.textDocument, uri } };
   }
 
   return await lsp.sendRequest(methodId, lspArgs);
