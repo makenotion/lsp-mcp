@@ -16,5 +16,6 @@
       "args": ["--from", "python-lsp-server", "pylsp"]
     }
   ],
+  // optional filter for which LSP methods to support, defaults to all methods
   "methods": ["textDocument/documentSymbol"]
 }

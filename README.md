@@ -1,7 +1,25 @@
 # LSP MCP
 An Model Context Protocol (MCP) server that provides LLMs/AI Agents with the capabilities of a language server protocol (LSP) server. This gives the AI the ability to get language aware context from the codebase.
 
-### Example
+- [LSP MCP](#lsp-mcp)
+  - [Example](#example)
+  - [Warning](#warning)
+  - [Features](#features)
+  - [Quick Start](#quick-start)
+    - [Claude Desktop](#claude-desktop)
+      - [Using Docker (Recommended)](#using-docker-recommended)
+      - [Using npx](#using-npx)
+    - [MCP CLI Client](#mcp-cli-client)
+  - [The ABCs (Introduction)](#the-abcs-introduction)
+    - [What is an MCP?](#what-is-an-mcp)
+    - [What is an LSP?](#what-is-an-lsp)
+  - [Development](#development)
+    - [Dependencies](#dependencies)
+    - [Decisions](#decisions)
+    - [Roadmap](#roadmap)
+  - [References](#references)
+
+## Example
 
 **Input:**
 ```
@@ -49,6 +67,10 @@ This is a classic example of variable shadowing in JavaScript/TypeScript, where 
 
 ## Warning
 This is in a POC state.
+
+## Features
+* Multiple LSPs at the same time, see [sample config](./dev/dev.config.json)
+* Dynamically generates supported LSP method from LSP JSON Schema, see [json schema](./src/resources/generated.protocol.schema.json)
 
 ## Quick Start
 ### Claude Desktop
