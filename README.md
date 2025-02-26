@@ -69,7 +69,7 @@ This is a classic example of variable shadowing in JavaScript/TypeScript, where 
 This is in a POC state.
 
 ## Features
-* Multiple LSPs at the same time, see [sample config](./dev/dev.config.json)
+* Multiple LSPs (Multiple programming language support) at the same time, see [sample config](./dev/dev.config.json)
 * Dynamically generates supported LSP method from LSP JSON Schema, see [json schema](./src/resources/generated.protocol.schema.json)
 
 ## Quick Start
