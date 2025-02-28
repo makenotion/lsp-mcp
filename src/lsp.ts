@@ -10,7 +10,9 @@ export interface LspClient {
   id: string;
   languages: string[];
   extensions: string[];
+  capabilities: protocol.ServerCapabilities | undefined;
   start(): Promise<void>;
+  isStarted(): boolean;
   dispose: () => void;
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
@@ -22,7 +24,7 @@ export class LspClientImpl implements LspClient {
 
   protected connection: rpc.MessageConnection | undefined;
 
-  protected capabilities: protocol.ServerCapabilities | undefined;
+  public capabilities: protocol.ServerCapabilities | undefined;
 
   public constructor(
     public readonly id: string,
@@ -32,9 +34,13 @@ export class LspClientImpl implements LspClient {
     private readonly command: string,
     private readonly args: string[],
     private readonly logger: Logger, // TODO: better long term solution for logging
-  ) {}
+  ) {
+    this.capabilities = undefined;
+  }
 
   public async start() {
+    // TODO: This should return a promise if the LSP is still starting
+    // Just don't call start() twice and it'll be fine :)
     if (this.isStarted()) {
       return;
     }
@@ -78,9 +84,10 @@ export class LspClientImpl implements LspClient {
     });
 
     this.logger.info(`Server LSP capabilities: ${JSON.stringify(response, null, 2)}`);
+    this.capabilities = response.capabilities;
   }
 
-  private isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
+  public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
     return !!this.connection;
   }
 

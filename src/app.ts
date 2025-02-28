@@ -22,7 +22,7 @@ export class App {
 
   constructor(
     config: Config,
-    logger: Logger,
+    protected readonly logger: Logger,
   ) {
     // keeps track of all the tools we're sending to the MCP
     this.toolManager = new ToolManager(logger);
@@ -61,7 +61,8 @@ export class App {
       }
 
       const result = await this.toolManager.callTool(name, args);
-      const serialized = typeof result === "string" ? result : JSON.stringify(result, null, 2);
+      const serialized =
+        typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
       return {
         content: [{ type: "text", text: serialized }],
@@ -78,11 +79,19 @@ export class App {
       },
       handler: async () => {
         const result = this.lspManager.getLsps().map((lsp) => {
+          const started = lsp.isStarted();
           return {
             id: lsp.id,
             languages: lsp.languages,
             extensions: lsp.extensions,
-          }
+            // Remember, this is communicating with an AI. It doesn't care about type safety
+            started: started
+              ? true
+              : `Not started. LSP will start automatically when needed, such as when analyzing a file with extensions ${lsp.extensions.join(", ")}.`,
+            capabilities: started
+              ? lsp.capabilities
+              : "LSP not started. Capabilities will be available when started.",
+          };
         });
 
         return JSON.stringify(result, null, 2)
