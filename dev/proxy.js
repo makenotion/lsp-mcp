@@ -28,7 +28,7 @@ function agentShim() {
   //get command line args
   const args = process.argv.slice(2);
   startProcess(
-    ["/Users/jonrad/projects/lsp-mcp/.venv/bin/pylsp", ...args],
+    ["/Users/jonrad/projects/lsp-mcp/.venv/bin/jedi-language-server", ...args],
     "/tmp/shim.log",
   );
 }
