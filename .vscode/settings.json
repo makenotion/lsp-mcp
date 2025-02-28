@@ -3,6 +3,8 @@
       "lsps",
       "modelcontextprotocol",
       "multilspy",
-      "Taskfile"
+      "pylsp",
+      "Taskfile",
+      "venv"
     ]
 }
