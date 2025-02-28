@@ -15,9 +15,6 @@ const toolBlacklist = [
   // Useless for MCP?
   "client/registerCapability",
   "client/unregisterCapability",
-
-  // TODO: Can we handle this? typescript lsp doesn't support it
-  "workspace/workspaceFolders",
 ];
 
 export interface LSPMethods {
