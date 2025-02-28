@@ -17,7 +17,8 @@ export class App {
   private readonly toolManager: ToolManager;
   private readonly lspManager: LspManager;
   private readonly mcp: McpServer;
-  private readonly lspMethods: Promise<LSPMethods[]>;
+  private readonly availableMethodIds: Promise<LSPMethods[]>;
+  private readonly workspace: string;
 
   constructor(
     config: Config,
@@ -30,7 +31,9 @@ export class App {
     // the MCP server
     this.mcp = createMcp();
     // The LSP methods we support (textDocument/foo, etc)
-    this.lspMethods = getLspMethods(config.methods);
+    this.availableMethodIds = getLspMethods(config.methods);
+
+    this.workspace = config.workspace ?? "/";
 
     // Cleanup on any signal
     process.on('SIGINT', () => this.dispose());
@@ -119,7 +122,8 @@ export class App {
       },
     });
 
-    (await this.lspMethods).forEach((method) => {
+    const availableMethodIds = (await this.availableMethodIds).sort((a, b) => a.id.localeCompare(b.id));
+    availableMethodIds.forEach((method) => {
       const id = method.id;
       const inputSchema: JSONSchema4 = this.removeInputSchemaInvariants(method.inputSchema);
 
@@ -182,6 +186,10 @@ export class App {
     }
   }
 
+  private async getAvailableMethodIds() {
+    return this.availableMethodIds;
+  }
+
   // Remove invariant types from the input schema since some MCPs have a hard time with them
   // Looking at you mcp-client-cli
   private removeInputSchemaInvariants(inputSchema: JSONSchema4): JSONSchema4 {
@@ -217,6 +225,7 @@ export class App {
           lspConfig.id,
           lspConfig.languages,
           lspConfig.extensions,
+          this.workspace,
           lspConfig.command,
           lspConfig.args,
           logger,

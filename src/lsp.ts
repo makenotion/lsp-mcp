@@ -28,6 +28,7 @@ export class LspClientImpl implements LspClient {
     public readonly id: string,
     public readonly languages: string[],
     public readonly extensions: string[],
+    public readonly workspace: string,
     private readonly command: string,
     private readonly args: string[],
     private readonly logger: Logger, // TODO: better long term solution for logging
@@ -69,13 +70,14 @@ export class LspClientImpl implements LspClient {
     // TODO: We should figure out how to specify the capabilities we want
     const capabilities: protocol.ClientCapabilities = {};
 
+    const uri = `file://${this.workspace}`;
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
-      rootUri: "file:///", // TODO: figure out the best way to handle this
+      rootUri: uri,
       capabilities: capabilities,
     });
 
-    this.logger.info(`Server LSP capabilities: ${JSON.stringify(response.capabilities, null, 2)}`);
+    this.logger.info(`Server LSP capabilities: ${JSON.stringify(response, null, 2)}`);
   }
 
   private isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {

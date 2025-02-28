@@ -12,6 +12,9 @@ const ConfigSchema = z.object({
   methods: z.optional(z.array(z.string()), {
     description: "LSP methods to enable, if not provided, all methods will be enabled",
   }),
+  workspace: z.optional(z.string(), {
+    description: "Path to the workspace to use for the LSP. Defaults to /"
+  }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

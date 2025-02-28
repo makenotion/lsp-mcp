@@ -38,6 +38,7 @@ async function buildConfig(options: OptionValues, logger: Logger): Promise<Confi
         },
       ],
       methods: options.methods,
+      workspace: options.workspace,
     };
   }
 
@@ -58,6 +59,10 @@ async function main() {
     .option(
       "-l, --lsp <string>",
       "LSP command to start (note: command is passed through sh -c)",
+    )
+    .option(
+      "-w, --workspace [string]",
+      "Path to the workspace to use for the LSP. Defaults to /"
     )
     .option("-v, --verbose", "Verbose output (Dev only, don't use with MCP)")
     .option("-c, --config [string]", "Path to config file")
