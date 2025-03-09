@@ -9,6 +9,7 @@ An Model Context Protocol (MCP) server that provides LLMs/AI Agents with the cap
     - [Claude Desktop](#claude-desktop)
       - [Using Docker (Recommended)](#using-docker-recommended)
       - [Using npx](#using-npx)
+    - [Cursor](#cursor)
     - [MCP CLI Client](#mcp-cli-client)
   - [The ABCs (Introduction)](#the-abcs-introduction)
     - [What is an MCP?](#what-is-an-mcp)
@@ -108,6 +109,9 @@ Note: Claude Desktop is finicky with npx it seems. Sometimes it says the mcp fai
 This will provide Claude with the LSP capabilities of the typescript language server. You can modify the language server by switching the `--lsp` argument (and then restarting Claude).
 
 Multiple LSPs at the same time is not yet supported.
+
+### [Cursor](https://www.cursor.com/)
+Follow the instructions [provided by Cursor](https://docs.cursor.com/context/model-context-protocol). For settings, choose `Type` = `command` and `Command` = `docker run ...` as mentioned above for claude (eg `docker run -i --rm -v <LOCAL_DIR>:<REMOTE_DIR> jonrad/lsp-mcp:<version>`)
 
 ### [MCP CLI Client](https://github.com/adhikasp/mcp-client-cli)
 Follow the instructions for Claude but the config file is located in `~/.llm/config.json`
