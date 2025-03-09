@@ -29,7 +29,7 @@ export class LspManager {
   }
 
   getLsp(id: string): LspClient | undefined {
-    return this.lsps.get(id);
+    return this.lsps.get(id.toLowerCase());
   }
 
   getLsps(): LspClient[] {
