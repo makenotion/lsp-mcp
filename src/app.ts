@@ -108,14 +108,13 @@ export class App {
           file_contents: {
             type: "string",
             description: "The contents of the file",
-            required: true,
           },
           programming_language: {
             type: "string",
             description: "The programming language of the file",
-            required: false,
           },
         },
+        required: ["file_contents"],
       },
       handler: async (args) => {
         const { file_contents, programming_language } = args;
@@ -132,19 +131,34 @@ export class App {
     });
 
     const availableMethodIds = (await this.availableMethodIds).sort((a, b) => a.id.localeCompare(b.id));
+    const lsps = this.lspManager.getLsps();
+    const lspProperty: JSONSchema4 | undefined = lsps.length > 1 ? {
+      type: "string",
+      name: "lsp",
+      description: "The LSP to use to execute this method. Options are: " +
+        lsps.map((lsp) => `  ${lsp.id} for the programming languages ${lsp.languages.join(", ")}`).join("\n"),
+      enum: lsps.map((lsp) => lsp.id)
+    } : undefined;
+
     availableMethodIds.forEach((method) => {
       const id = method.id;
-      const inputSchema: JSONSchema4 = this.removeInputSchemaInvariants(method.inputSchema);
 
-      if (this.lspManager.hasManyLsps() && inputSchema.properties?.textDocument?.properties) {
-        inputSchema.properties.textDocument.properties = {
-          ...inputSchema.properties.textDocument.properties,
-          programming_language: {
-            type: "string",
-            description: "Optional programming language of the file, if not obvious from the file extension",
-            required: false,
-          },
-        };
+      // Clean up the input schema a bit
+      const inputSchema: JSONSchema4 = this.removeInputSchemaInvariants(method.inputSchema);
+      if (inputSchema.properties) {
+        for (const [propertyKey, property] of Object.entries(inputSchema.properties)) {
+          if (["partialResultToken", "workDoneToken"].includes(propertyKey)) {
+            if (!inputSchema.required || !Array.isArray(inputSchema.required) || !inputSchema.required.includes(propertyKey)) {
+              delete inputSchema.properties[propertyKey];
+            }
+          }
+        }
+      }
+
+      // If we're set up with more than one LSP, we'll request the LSP to be optionally specified
+      // If it isn't specified, we'll have to use some logic to figure out which LSP to use
+      if (lspProperty && inputSchema.properties) {
+        inputSchema.properties[lspProperty.name] = lspProperty;
       }
 
       this.toolManager.registerTool({
@@ -153,21 +167,26 @@ export class App {
         inputSchema: inputSchema,
         handler: (args) => {
           let lsp: LspClient | undefined;
-          if (this.lspManager.hasManyLsps() && args.textDocument) {
-            const programmingLanguage = args.textDocument.programming_language;
-            if (programmingLanguage) {
-              lsp = this.lspManager.getLspByLanguage(programmingLanguage);
+          if (lspProperty) {
+            const lspId = args[lspProperty.name];
+            if (lspId) {
+              lsp = this.lspManager.getLsp(lspId);
+              if (!lsp) {
+                // Sometimes the LLM gets confused and specifies the language instead of the LSP ID
+                lsp = this.lspManager.getLspByLanguage(lspId);
+              }
             }
 
-            if (!lsp) {
+            if (!lsp && args.textDocument?.uri) {
               // try by file extension
-              const extension = args.textDocument.uri?.split(".").pop();
+              const extension = args.textDocument.uri.split(".").pop();
               if (extension) {
                 lsp = this.lspManager.getLspByExtension(extension);
               }
             }
           }
 
+          // I wonder if using the last used LSP would be a better default...
           if (!lsp) {
             lsp = this.lspManager.getDefaultLsp();
           }
