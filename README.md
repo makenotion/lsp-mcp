@@ -83,7 +83,7 @@ Modify `claude_desktop_config.json` (As described in the [MCP Docs](https://mode
   "mcpServers": {
     "lsp": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "docker.io/jonrad/lsp-mcp:0.2.0"]
+      "args": ["run", "-i", "--rm", "docker.io/jonrad/lsp-mcp:0.3.0"]
     }
   }
 }
