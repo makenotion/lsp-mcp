@@ -22,9 +22,6 @@ WORKDIR /app
 
 RUN apt update
 
-# Dependencies that will likely be needed by multiple LSPs
-# RUN apt install -y python3 pip
-
 # LSPs
 RUN npm install -g typescript && npm install -g typescript-language-server
 RUN apt install -y python3-pylsp

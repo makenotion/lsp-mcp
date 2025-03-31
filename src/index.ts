@@ -36,10 +36,16 @@ async function buildConfig(options: OptionValues, logger: Logger): Promise<Confi
           command: "sh",
           args: ["-c", options.lsp],
         },
-      ],
-      methods: options.methods,
-      workspace: options.workspace,
+      ]
     };
+  }
+
+  if (options.methods) {
+    config.methods = options.methods;
+  }
+
+  if (options.workspace) {
+    config.workspace = options.workspace;
   }
 
   return config;
