@@ -19,7 +19,6 @@ export interface LspClient {
 }
 
 export class LspClientImpl implements LspClient {
-
   protected childProcess: ChildProcess | undefined;
 
   protected connection: rpc.MessageConnection | undefined;
@@ -45,17 +44,17 @@ export class LspClientImpl implements LspClient {
       return;
     }
 
-    const childProcess = this.childProcess = spawn(this.command, this.args);
+    const childProcess = (this.childProcess = spawn(this.command, this.args));
 
     if (!childProcess.stdout || !childProcess.stdin) {
       throw new Error("Child process not started");
     }
 
-    const connection = this.connection = rpc.createMessageConnection(
+    const connection = (this.connection = rpc.createMessageConnection(
       new StreamMessageReader(childProcess.stdout),
       new StreamMessageWriter(childProcess.stdin),
       this.logger,
-    );
+    ));
 
     connection.onError((error) => {
       this.logger.error(`Connection error: ${error}`);
@@ -68,7 +67,9 @@ export class LspClientImpl implements LspClient {
     });
 
     connection.onUnhandledNotification((notification) => {
-      this.logger.log(`Unhandled notification: ${JSON.stringify(notification)}`);
+      this.logger.log(
+        `Unhandled notification: ${JSON.stringify(notification)}`,
+      );
     });
 
     connection.listen();
@@ -83,15 +84,21 @@ export class LspClientImpl implements LspClient {
       capabilities: capabilities,
     });
 
-    this.logger.info(`Server LSP capabilities: ${JSON.stringify(response, null, 2)}`);
+    this.logger.info(
+      `Server LSP capabilities: ${JSON.stringify(response, null, 2)}`,
+    );
     this.capabilities = response.capabilities;
   }
 
-  public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
+  public isStarted(): this is LspClientImpl & {
+    connection: rpc.MessageConnection;
+  } {
     return !!this.connection;
   }
 
-  private assertStarted(): asserts this is LspClientImpl & { connection: rpc.MessageConnection } {
+  private assertStarted(): asserts this is LspClientImpl & {
+    connection: rpc.MessageConnection;
+  } {
     if (!this.connection) {
       throw new Error("Not started");
     }
