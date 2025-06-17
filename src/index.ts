@@ -6,10 +6,7 @@ import { Config, loadConfig } from "./config";
 import { App } from "./app";
 import { Logger } from "vscode-languageserver-protocol";
 
-async function buildConfig(
-  options: OptionValues,
-  logger: Logger,
-): Promise<Config> {
+async function buildConfig(options: OptionValues, logger: Logger): Promise<Config> {
   let config: Config | undefined;
 
   if (options.config) {
@@ -39,7 +36,7 @@ async function buildConfig(
           command: "sh",
           args: ["-c", options.lsp],
         },
-      ],
+      ]
     };
   }
 
@@ -71,7 +68,7 @@ async function main() {
     )
     .option(
       "-w, --workspace [string]",
-      "Path to the workspace to use for the LSP. Defaults to /",
+      "Path to the workspace to use for the LSP. Defaults to /"
     )
     .option("-v, --verbose", "Verbose output (Dev only, don't use with MCP)")
     .option("-c, --config [string]", "Path to config file")

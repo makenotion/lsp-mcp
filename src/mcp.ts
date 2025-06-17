@@ -1,6 +1,5 @@
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 // Create an MCP server
 export function createMcp(): McpServer {
@@ -18,9 +17,7 @@ export function createMcp(): McpServer {
 }
 
 // Start receiving messages on stdin and sending messages on stdout
-export async function startMcp(
-  mcp: McpServer,
-  transport: Transport = new StdioServerTransport(),
-) {
+export async function startMcp(mcp: McpServer) {
+  const transport = new StdioServerTransport();
   await mcp.connect(transport);
 }
