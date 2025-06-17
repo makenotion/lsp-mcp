@@ -12,6 +12,8 @@ import { Config } from "./config";
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { JSONSchema4, JSONSchema4TypeName } from "json-schema";
 import { LspManager } from "./lsp-manager";
+import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 export class App {
   private readonly toolManager: ToolManager;
@@ -197,11 +199,11 @@ export class App {
     });
   }
 
-  public async start() {
+  public async start(transport: Transport = new StdioServerTransport()) {
     await this.registerTools(),
     await this.initializeMcp(),
 
-    await startMcp(this.mcp);
+    await startMcp(this.mcp, transport);
   }
 
   public async dispose() {
