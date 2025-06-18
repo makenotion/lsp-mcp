@@ -9,6 +9,7 @@ import { getLspMethods, lspMethodHandler, LSPMethods, openFileContents } from ".
 import { ToolManager } from "./tool-manager";
 import { Logger } from "vscode-jsonrpc";
 import { Config } from "./config";
+import { paginateResponse} from "./paginate"
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { JSONSchema4, JSONSchema4TypeName } from "json-schema";
 import { LspManager } from "./lsp-manager";
@@ -141,18 +142,28 @@ export class App {
         lsps.map((lsp) => `  ${lsp.id} for the programming languages ${lsp.languages.join(", ")}`).join("\n"),
       enum: lsps.map((lsp) => lsp.id)
     } : undefined;
-
     availableMethodIds.forEach((method) => {
       const id = method.id;
+      let pagination = false;
 
       // Clean up the input schema a bit
       const inputSchema: JSONSchema4 = this.removeInputSchemaInvariants(method.inputSchema);
       if (inputSchema.properties) {
         for (const [propertyKey, property] of Object.entries(inputSchema.properties)) {
           if (["partialResultToken", "workDoneToken"].includes(propertyKey)) {
+            if ("partialResultToken" === propertyKey) {
+              pagination = true;
+            }
             if (!inputSchema.required || !Array.isArray(inputSchema.required) || !inputSchema.required.includes(propertyKey)) {
               delete inputSchema.properties[propertyKey];
             }
+          }
+        }
+        if (pagination ) {
+          inputSchema.properties["page"] = {
+            type: "integer",
+            name: "page",
+            description: "When there are more results than can fit in a single response, this will return a token that can be used to get the next page of results. The first page is 0 and is the default.",
           }
         }
       }
@@ -167,7 +178,7 @@ export class App {
         id: method.id.replace("/", "_"),
         description: method.description,
         inputSchema: inputSchema,
-        handler: (args) => {
+        handler: async (args) => {
           let lsp: LspClient | undefined;
           if (lspProperty) {
             const lspId = args[lspProperty.name];
@@ -193,7 +204,12 @@ export class App {
             lsp = this.lspManager.getDefaultLsp();
           }
 
-          return lspMethodHandler(lsp, id, args);
+          const result = await lspMethodHandler(lsp, id, args);
+          if (pagination) {
+            const page = "page" in args ? args["page"] : 0;
+            return paginateResponse(result, page);
+          }
+          return result
         },
       });
     });
