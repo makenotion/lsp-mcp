@@ -1,15 +1,20 @@
-
 import { LspClient, LspClientImpl } from "./lsp";
 import { createMcp, startMcp } from "./mcp";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { getLspMethods, lspMethodHandler, LSPMethods, openFileContents } from "./lsp-methods";
+import {
+  getLspMethods,
+  lspMethodHandler,
+  LSPMethods,
+  openFileContents,
+} from "./lsp-methods";
 import { ToolManager } from "./tool-manager";
 import { Logger } from "vscode-jsonrpc";
 import { Config } from "./config";
-import { paginateResponse} from "./paginate"
+import { flattenJson } from "./utils";
+import { paginateResponse } from "./paginate";
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { JSONSchema4, JSONSchema4TypeName } from "json-schema";
 import { LspManager } from "./lsp-manager";
@@ -76,7 +81,8 @@ export class App {
   private async registerTools() {
     this.toolManager.registerTool({
       id: "lsp_info",
-      description: "Returns information about the the LSP tools available. This is useful for debugging which programming languages are supported.",
+      description:
+        "Returns information about the the LSP tools available. This is useful for debugging which programming languages are supported.",
       inputSchema: {
         type: "object" as "object",
       },
@@ -97,14 +103,13 @@ export class App {
           };
         });
 
-        return JSON.stringify(result, null, 2)
+        return JSON.stringify(result, null, 2);
       },
     });
 
     this.toolManager.registerTool({
       id: "file_contents_to_uri",
-      description:
-        `Creates a URI given some file contents to be used in the LSP methods that require a URI. This is only required if the file is not on the filesystem. Otherwise you may pass the file path directly.`,
+      description: `Creates a URI given some file contents to be used in the LSP methods that require a URI. This is only required if the file is not on the filesystem. Otherwise you may pass the file path directly.`,
       inputSchema: {
         type: "object" as "object",
         properties: {
@@ -121,7 +126,9 @@ export class App {
       },
       handler: async (args) => {
         const { file_contents, programming_language } = args;
-        const lsp = this.lspManager.getLspByLanguage(programming_language) || this.lspManager.getDefaultLsp();
+        const lsp =
+          this.lspManager.getLspByLanguage(programming_language) ||
+          this.lspManager.getDefaultLsp();
         const uri = `mem://${Math.random().toString(36).substring(2, 15)}.${lsp.id}`;
         if (!lsp) {
           throw new Error(`No LSP found for language: ${programming_language}`);
@@ -159,7 +166,7 @@ export class App {
             }
           }
         }
-        if (pagination ) {
+        if (pagination) {
           inputSchema.properties["page"] = {
             type: "integer",
             name: "page",
@@ -209,7 +216,7 @@ export class App {
             const page = "page" in args ? args["page"] : 0;
             return paginateResponse(result, page);
           }
-          return result
+          return result;
         },
       });
     });
@@ -274,6 +281,7 @@ export class App {
           this.workspace,
           lspConfig.command,
           lspConfig.args,
+          flattenJson(lspConfig.settings),
           logger,
         ),
     );
