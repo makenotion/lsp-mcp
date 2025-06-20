@@ -9,7 +9,7 @@ import { getLspMethods, lspMethodHandler, LSPMethods, openFileContents } from ".
 import { ToolManager } from "./tool-manager";
 import { Logger } from "vscode-jsonrpc";
 import { Config } from "./config";
-import { paginateResponse} from "./paginate"
+import { paginateResponse } from "./paginate"
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { JSONSchema4, JSONSchema4TypeName } from "json-schema";
 import { LspManager } from "./lsp-manager";
