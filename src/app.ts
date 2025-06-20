@@ -144,22 +144,19 @@ export class App {
     } : undefined;
     availableMethodIds.forEach((method) => {
       const id = method.id;
-      let pagination = false;
 
       // Clean up the input schema a bit
       const inputSchema: JSONSchema4 = this.removeInputSchemaInvariants(method.inputSchema);
+      const pagination = inputSchema.properties && inputSchema.properties["partialResultToken"] !== undefined;
       if (inputSchema.properties) {
         for (const [propertyKey, property] of Object.entries(inputSchema.properties)) {
           if (["partialResultToken", "workDoneToken"].includes(propertyKey)) {
-            if ("partialResultToken" === propertyKey) {
-              pagination = true;
-            }
             if (!inputSchema.required || !Array.isArray(inputSchema.required) || !inputSchema.required.includes(propertyKey)) {
               delete inputSchema.properties[propertyKey];
             }
           }
         }
-        if (pagination ) {
+        if (pagination) {
           inputSchema.properties["page"] = {
             type: "integer",
             name: "page",
