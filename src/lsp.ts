@@ -6,7 +6,7 @@ import * as protocol from "vscode-languageserver-protocol";
 import { Logger } from "vscode-jsonrpc";
 import path from "path";
 import { getLspMethods } from "./lsp-methods";
-import { flattenJson } from "./utils";
+import { flattenJson, JSON_OBJECT } from "./utils";
 export interface LspClient {
   id: string;
   languages: string[];
@@ -87,9 +87,16 @@ export class LspClientImpl implements LspClient {
         this.logger.log(`LSP: ${message}`);
       },
     );
-    connection.onRequest(protocol.ShowMessageRequest.type, (request) => {
-      this.logger.log(`Unhandled request: ${JSON.stringify(request)}`);
-    });
+    connection.onRequest(
+      protocol.ShowMessageRequest.type,
+      (
+        request: protocol.ShowMessageRequestParams,
+        ___: rpc.CancellationToken,
+      ): protocol.MessageActionItem | null => {
+        this.logger.log(`Unhandled request: ${JSON.stringify(request)}`);
+        return null;
+      },
+    );
     connection.onUnhandledNotification((notification) => {
       this.logger.log(
         `Unhandled notification: ${JSON.stringify(notification)}`,
@@ -99,7 +106,7 @@ export class LspClientImpl implements LspClient {
     connection.listen();
 
     // TODO: We should figure out how to specify the capabilities we want
-    let capabilities: protocol.ClientCapabilities = {
+    let capabilities: protocol.ClientCapabilities & JSON_OBJECT = {
       workspace: {
         configuration: true,
       },

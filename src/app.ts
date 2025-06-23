@@ -109,8 +109,7 @@ export class App {
 
     this.toolManager.registerTool({
       id: "file_contents_to_uri",
-      description:
-        `Creates a URI given some file contents to be used in the LSP methods that require a URI. This is only required if the file is not on the filesystem. Otherwise you may pass the file path directly.`,
+      description: `Creates a URI given some file contents to be used in the LSP methods that require a URI. This is only required if the file is not on the filesystem. Otherwise you may pass the file path directly.`,
       inputSchema: {
         type: "object" as "object",
         properties: {
@@ -277,7 +276,7 @@ export class App {
           this.workspace,
           lspConfig.command,
           lspConfig.args,
-          flattenJson(lspConfig.settings),
+          flattenJson(lspConfig.settings ?? {}),
           logger,
         ),
     );
