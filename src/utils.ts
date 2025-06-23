@@ -13,6 +13,9 @@ export function flattenJson(original: JSON_OBJECT): JSON_OBJECT {
     let node: JSON_OBJECT = result;
     for (let i = 0; node && i < parts.length - 1; i++) {
       node[parts[i]] ??= {};
+      if (node[parts[i]] == true) {
+        node[parts[i]] = {};
+      }
       node = node[parts[i]] as JSON_OBJECT;
     }
     if (node && parts.length) {

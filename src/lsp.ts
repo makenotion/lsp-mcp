@@ -38,14 +38,10 @@ export class LspClientImpl implements LspClient {
   ) {
     this.capabilities = undefined;
   }
-
-  public async start() {
-    // TODO: This should return a promise if the LSP is still starting
-    // Just don't call start() twice and it'll be fine :)
-    if (this.isStarted()) {
-      return;
-    }
-
+   async spawnChildProcess(): Promise<{
+    connection: rpc.MessageConnection,
+    childProcess: ChildProcess
+  }> {
     const childProcess = (this.childProcess = spawn(this.command, this.args));
 
     if (!childProcess.stdout || !childProcess.stdin) {
@@ -57,6 +53,15 @@ export class LspClientImpl implements LspClient {
       new StreamMessageWriter(childProcess.stdin),
       this.logger,
     ));
+    return {connection, childProcess};
+  }
+  public async start() {
+    // TODO: This should return a promise if the LSP is still starting
+    // Just don't call start() twice and it'll be fine :)
+    if (this.isStarted()) {
+      return;
+    }
+    const {connection, childProcess} = await this.spawnChildProcess()
     connection.onError((error) => {
       this.logger.error(`Connection error: ${error}`);
       childProcess.kill();
