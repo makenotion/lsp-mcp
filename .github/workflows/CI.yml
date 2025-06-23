@@ -1,0 +1,21 @@
+name: CI
+on:
+  push:
+    - "main"
+  pull_request:
+    - "main"
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v3
+      - run: yarn install --frozen-lockfile
+      - run: yarn typecheck
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v3
+      - run: yarn install --frozen-lockfile
+      - run: yarn test
