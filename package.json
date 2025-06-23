@@ -20,6 +20,7 @@
     "eslint": "^9.21.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.3",
+    "jest": "^30.0.2",
     "prettier": "^3.5.2",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
@@ -36,13 +37,10 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "test": "jest",
-
     "mcp-cli:simple": "npx @wong2/mcp-cli --config dev/mcp-cli/simple.json",
     "mcp-cli:config": "npx @wong2/mcp-cli --config dev/mcp-cli/with-config.json",
     "mcp-cli:npx": "npx @wong2/mcp-cli --config dev/mcp-cli/npx.json",
     "mcp-cli:docker": "npx @wong2/mcp-cli --config dev/mcp-cli/with-docker.json",
-
-
     "llm": "uvx --python 3.12 --from git+https://github.com/adhikasp/mcp-client-cli.git llm --text-only"
   },
   "dependencies": {
