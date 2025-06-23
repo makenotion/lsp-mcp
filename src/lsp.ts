@@ -38,22 +38,26 @@ export class LspClientImpl implements LspClient {
   ) {
     this.capabilities = undefined;
   }
-   async spawnChildProcess(): Promise<{
-    connection: rpc.MessageConnection,
-    childProcess: ChildProcess
+  async spawnChildProcess(): Promise<{
+    connection: rpc.MessageConnection;
+    childProcess: ChildProcess;
   }> {
     const childProcess = (this.childProcess = spawn(this.command, this.args));
 
     if (!childProcess.stdout || !childProcess.stdin) {
       throw new Error("Child process not started");
     }
+    childProcess.stderr.on("data", (data) => {
+      this.logger.log(`lsp stderr: ${data}`);
+    });
 
     const connection = (this.connection = rpc.createMessageConnection(
       new StreamMessageReader(childProcess.stdout),
       new StreamMessageWriter(childProcess.stdin),
       this.logger,
     ));
-    return {connection, childProcess};
+    this.logger.log(`LSP: Spawning child process ${this.command} ${this.args}`);
+    return { connection, childProcess };
   }
   public async start() {
     // TODO: This should return a promise if the LSP is still starting
@@ -61,7 +65,7 @@ export class LspClientImpl implements LspClient {
     if (this.isStarted()) {
       return;
     }
-    const {connection, childProcess} = await this.spawnChildProcess()
+    const { connection, childProcess } = await this.spawnChildProcess();
     connection.onError((error) => {
       this.logger.error(`Connection error: ${error}`);
       childProcess.kill();
@@ -116,12 +120,6 @@ export class LspClientImpl implements LspClient {
         configuration: true,
       },
     };
-    const methods = await getLspMethods();
-    for (const method of methods) {
-      if (method.capability) {
-        capabilities[method.capability] = true;
-      }
-    }
     capabilities = flattenJson(capabilities);
     const uri = `file://${this.workspace}`;
     const response = await connection.sendRequest(InitializeRequest.type, {
