@@ -20,6 +20,7 @@ const toolBlacklist = [
 export interface LSPMethods {
   id: string;
   description: string;
+  capability: string;
   inputSchema: JSONSchema4;
 }
 
@@ -127,6 +128,7 @@ export async function getLspMethods(
       return undefined;
     }
 
+
     // TODO: Not sure if this is the best way to handle this
     // But this occurs when the jsonschema has no param properties
     let inputSchema = definition.properties.params
@@ -135,10 +137,14 @@ export async function getLspMethods(
         type: 'object' as 'object',
       }
     }
-
+    const metaModelTool = metaModelLookup.get(id);
+    if (metaModelTool?.messageDirection != "clientToServer"){
+      return undefined
+    }
     return {
       id: id,
-      description: `method: ${id}\n${metaModelLookup.get(id)?.documentation ?? ""}`,
+      capability: metaModelTool?.clientCapability ?? "",
+      description: `method: ${id}\n${metaModelTool?.documentation ?? ""}`,
       inputSchema: inputSchema,
     }
   }).filter((tool) => tool !== undefined);

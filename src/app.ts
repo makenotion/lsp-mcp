@@ -1,15 +1,20 @@
-
 import { LspClient, LspClientImpl } from "./lsp";
 import { createMcp, startMcp } from "./mcp";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { getLspMethods, lspMethodHandler, LSPMethods, openFileContents } from "./lsp-methods";
+import {
+  getLspMethods,
+  lspMethodHandler,
+  LSPMethods,
+  openFileContents,
+} from "./lsp-methods";
 import { ToolManager } from "./tool-manager";
 import { Logger } from "vscode-jsonrpc";
 import { Config } from "./config";
-import { paginateResponse } from "./paginate"
+import { flattenJson } from "./utils";
+import { paginateResponse } from "./paginate";
 import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { JSONSchema4, JSONSchema4TypeName } from "json-schema";
 import { LspManager } from "./lsp-manager";
@@ -76,7 +81,8 @@ export class App {
   private async registerTools() {
     this.toolManager.registerTool({
       id: "lsp_info",
-      description: "Returns information about the the LSP tools available. This is useful for debugging which programming languages are supported.",
+      description:
+        "Returns information about the the LSP tools available. This is useful for debugging which programming languages are supported.",
       inputSchema: {
         type: "object" as "object",
       },
@@ -97,7 +103,7 @@ export class App {
           };
         });
 
-        return JSON.stringify(result, null, 2)
+        return JSON.stringify(result, null, 2);
       },
     });
 
@@ -271,6 +277,7 @@ export class App {
           this.workspace,
           lspConfig.command,
           lspConfig.args,
+          flattenJson(lspConfig.settings),
           logger,
         ),
     );

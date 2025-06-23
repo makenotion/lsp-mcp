@@ -8,6 +8,7 @@ const ConfigSchema = z.object({
     languages: z.array(z.string()),
     command: z.string(),
     args: z.array(z.string()),
+    settings: z.optional(z.object())
   })),
   methods: z.optional(z.array(z.string()), {
     description: "LSP methods to enable, if not provided, all methods will be enabled",
