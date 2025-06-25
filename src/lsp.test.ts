@@ -10,10 +10,13 @@ import * as rpc from "vscode-jsonrpc";
 import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { duplexPair } from "stream";
 import { LspClientImpl } from "./lsp";
-import { nullLogger } from "./logger";
+import { errorLogger, nullLogger } from "./logger";
 import * as protocol from "vscode-languageserver-protocol";
 import { spawn } from "child_process";
 import { flattenJson } from "./utils";
+import exp from "constants";
+import { error } from "console";
+import { version } from "os";
 describe("LSP protocol tests", () => {
 	let client: LspClientImpl;
 
@@ -48,7 +51,10 @@ describe("LSP protocol tests", () => {
 		mockSpawn = jest
 			.spyOn(LspClientImpl.prototype, "spawnChildProcess")
 			.mockImplementation(async () => {
-				return { connection: client_connection, childProcess: spawn("true") };
+				return {
+					connection: client_connection,
+					childProcess: spawn("cat"),
+				};
 			});
 		server_connection = rpc.createMessageConnection(
 			new StreamMessageReader(pair_b_read),
@@ -62,7 +68,7 @@ describe("LSP protocol tests", () => {
 			"",
 			[],
 			flattenJson(SETTINGS),
-			nullLogger,
+			errorLogger,
 		);
 	});
 	test("Initialize is sent", async () => {
@@ -90,12 +96,12 @@ describe("LSP protocol tests", () => {
 			},
 		);
 		server_connection.listen();
-		const client_spawn = client.start();
+		expect(client.isStarted()).toBe(false);
+		await client.start();
+		expect(client.isStarted()).toBe(true);
 		expect(mockSpawn).toBeCalledTimes(1);
-
-		await client_spawn;
 		expect(initialize).toBe(true);
-		await new Promise((r) => setTimeout(r, 2000));
+		await new Promise((r) => setTimeout(r, 200));
 		expect(initialized).toBe(true);
 	});
 	test("Configuration Support", async () => {
@@ -117,6 +123,93 @@ describe("LSP protocol tests", () => {
 			{ items: [{}] },
 		);
 		expect(config).toEqual([EXPECTED_SETTINGS]);
+	});
+	describe("With Initialized Server", () => {
+		beforeEach(async () => {
+			server_connection.onRequest(
+				protocol.InitializeRequest.type,
+				async (params: protocol.InitializeParams) => {
+					return { capabilities: {} };
+				},
+			);
+			server_connection.onNotification(
+				protocol.InitializedNotification.type,
+				async (_: protocol.InitializedParams) => {},
+			);
+			server_connection.listen();
+			await client.start();
+		});
+		test("Update document", async () => {
+			let changed = false;
+			let opened = false;
+			let saved = false;
+			const URI = "file:///my/test/file";
+			const OLD_CONTENT = "old_content";
+			const NEW_CONTENT = "new_content";
+			server_connection.onNotification(
+				protocol.DidChangeTextDocumentNotification.type,
+				async (params) => {
+					expect(params).toEqual({
+						contentChanges: [
+							{
+								text: NEW_CONTENT,
+								range: {
+									start: { line: 0, character: 0 },
+									end: { line: 0, character: 11 },
+								},
+							},
+						],
+						textDocument: {
+							uri: URI,
+							version: 2,
+						},
+					});
+
+					changed = true;
+				},
+			);
+			server_connection.onNotification(
+				protocol.DidSaveTextDocumentNotification.type,
+				async (params) => {
+					expect(params).toEqual({
+						textDocument: {
+							uri: URI,
+						},
+						text: NEW_CONTENT,
+					});
+
+					saved = true;
+				},
+			);
+			server_connection.onNotification(
+				protocol.DidOpenTextDocumentNotification.type,
+				async (params) => {
+					expect(opened).toBe(false); // We shouldn't open the same document twice and instead change it.
+					expect(params).toEqual({
+						textDocument: {
+							uri: URI,
+							languageId: "typescript",
+							version: 1,
+							text: OLD_CONTENT,
+						},
+					});
+					opened = true;
+				},
+			);
+			expect(opened).toBe(false);
+			expect(changed).toBe(false);
+			expect(saved).toBe(false);
+			await client.openFileContents(URI, OLD_CONTENT);
+			await new Promise((r) => setTimeout(r, 200));
+			expect(opened).toBe(true);
+			expect(changed).toBe(false);
+			expect(saved).toBe(false);
+			await client.openFileContents(URI, NEW_CONTENT);
+			expect(opened).toBe(true);
+			await new Promise((r) => setTimeout(r, 200));
+			expect(changed).toBe(true);
+			expect(saved).toBe(true);
+		});
 	});
 	afterEach(() => {
 		client.dispose();
