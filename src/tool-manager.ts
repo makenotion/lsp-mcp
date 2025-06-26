@@ -14,7 +14,6 @@ export class ToolManager {
   constructor(private readonly logger: Logger) {}
 
   public registerTool(tool: Tool): void {
-    this.logger.info(`Registering tool ${tool.id}`);
     this.toolsById.set(tool.id, tool);
   }
 
