@@ -1,22 +1,22 @@
-export type JSON_VALUE =
+export type JSONValue =
   | string
   | number
   | boolean
-  | JSON_OBJECT
+  | JSONObject
   | null
-  | JSON_VALUE[];
-export type JSON_OBJECT = { [_: string]: JSON_VALUE };
-export function flattenJson(original: JSON_OBJECT): JSON_OBJECT {
-  const result: JSON_VALUE = {};
+  | JSONValue[];
+export type JSONObject = { [_: string]: JSONValue };
+export function flattenJson(original: JSONObject): JSONObject {
+  const result: JSONValue = {};
   for (const [key, value] of Object.entries(original)) {
     const parts = key.split(".");
-    let node: JSON_OBJECT = result;
+    let node: JSONObject = result;
     for (let i = 0; node && i < parts.length - 1; i++) {
       node[parts[i]] ??= {};
       if (node[parts[i]] == true) {
         node[parts[i]] = {};
       }
-      node = node[parts[i]] as JSON_OBJECT;
+      node = node[parts[i]] as JSONObject;
     }
     if (node && parts.length) {
       node[parts[parts.length - 1]] = value;
