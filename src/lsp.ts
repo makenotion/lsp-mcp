@@ -13,7 +13,7 @@ export interface LspClient {
   capabilities: protocol.ServerCapabilities | undefined;
   start(): Promise<void>;
   isStarted(): boolean;
-  dispose: () => void;
+  dispose: () => Promise<void>;
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents: string): Promise<void>;
@@ -242,8 +242,9 @@ export class LspClientImpl implements LspClient {
     }
   }
 
-  dispose() {
+  async dispose() {
     try {
+      await this.connection?.sendRequest(protocol.ShutdownRequest.type)
       this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
       this.childProcess?.kill();
       this.connection?.dispose();
