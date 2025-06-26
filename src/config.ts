@@ -16,6 +16,7 @@ const ConfigSchema = z.object({
       command: z.string(),
       args: z.array(z.string()),
       settings: z.optional(z.record(jsonSchema)),
+      eagerStartup: z.optional(z.boolean(), {description:"Start language when the MCP is initialized"}),
     }),
   ),
   methods: z.optional(z.array(z.string()), {

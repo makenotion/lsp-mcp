@@ -213,6 +213,11 @@ export class App {
   }
 
   public async start(transport: Transport = new StdioServerTransport()) {
+    await Promise.all(this.lspManager.getLsps().map(async (lsp) => {
+      if(lsp.eagerStartup) {
+        await lsp.start()
+      }
+    }))
     await this.registerTools(),
     await this.initializeMcp(),
     await startMcp(this.mcp, transport);
@@ -276,6 +281,7 @@ export class App {
           lspConfig.languages,
           lspConfig.extensions,
           this.workspace,
+          lspConfig.eagerStartup ?? false,
           lspConfig.command,
           lspConfig.args,
           flattenJson(lspConfig.settings ?? {}),
