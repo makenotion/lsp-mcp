@@ -57,6 +57,7 @@ describe("LSP protocol tests", () => {
 			new StreamMessageReader(pair_b_read),
 			new StreamMessageWriter(pair_a_write),
 		);
+		server_connection.onRequest(protocol.ShutdownRequest.type, async () => {});
 		client = new LspClientImpl(
 			"id",
 			[],
@@ -203,9 +204,17 @@ describe("LSP protocol tests", () => {
 			expect(changed).toBe(true);
 			expect(saved).toBe(true);
 		});
+		test("Shutdown", async () => {
+			let shutdown = false;
+			server_connection.onRequest(protocol.ShutdownRequest.type, async () => {
+				shutdown = true;
+			});
+			await client.dispose();
+			expect(shutdown).toBe(true);
+		});
 	});
-	afterEach(() => {
-		client.dispose();
+	afterEach(async () => {
+		await client.dispose();
 		server_connection?.dispose();
 	});
 });

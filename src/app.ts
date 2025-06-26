@@ -15,7 +15,7 @@ import { JSONSchema4, JSONSchema4TypeName } from "json-schema";
 import { LspManager } from "./lsp-manager";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-
+import { promises as stream } from "node:stream"
 export class App {
   private readonly toolManager: ToolManager;
   private readonly lspManager: LspManager;
@@ -215,13 +215,20 @@ export class App {
   public async start(transport: Transport = new StdioServerTransport()) {
     await this.registerTools(),
     await this.initializeMcp(),
-
     await startMcp(this.mcp, transport);
   }
 
+  public async runTillFinished() {
+    await stream.finished(process.stdin, {})
+    await this.dispose()
+  }
+
   public async dispose() {
+    this.logger.info("Shutting down...");
     if (this.lspManager !== undefined) {
-      this.lspManager.getLsps().forEach((lsp) => lsp.dispose());
+     for (const lsp of this.lspManager.getLsps()) {
+        await lsp.dispose();
+      }
     }
 
     if (this.mcp !== undefined) {

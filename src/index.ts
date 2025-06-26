@@ -85,6 +85,7 @@ async function main() {
 
   try {
     await app.start();
+    await app.runTillFinished()
   } catch (e: any) {
     logger.error(e.toString?.());
     process.exit(1);
