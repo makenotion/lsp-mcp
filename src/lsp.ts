@@ -10,6 +10,7 @@ export interface LspClient {
   id: string;
   languages: string[];
   extensions: string[];
+  eagerStartup: boolean;
   capabilities: protocol.ServerCapabilities | undefined;
   start(): Promise<void>;
   isStarted(): boolean;
@@ -37,6 +38,7 @@ export class LspClientImpl implements LspClient {
     public readonly languages: string[],
     public readonly extensions: string[],
     public readonly workspace: string,
+    public readonly eagerStartup: boolean,
     private readonly command: string,
     private readonly args: string[],
     private readonly settings: object,
