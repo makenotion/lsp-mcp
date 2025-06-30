@@ -184,14 +184,13 @@ export class LspClientImpl implements LspClient {
 
     return await this.connection.sendNotification(method, args);
   }
-  // Let's the LSP know about a file contents
+  // Lets the LSP know about a file contents
   public async openFileContents(uri: string, contents: string): Promise<void> {
     if (uri in this.files) {
       if (this.files[uri].content !== contents) {
         this.logger.info(`LSP: File contents changed at ${uri}`);
         const version = this.files[uri].version + 1;
         this.files[uri] = { content: contents, version };
-        const lines = contents.split("\n");
         await this.sendNotification(
           protocol.DidChangeTextDocumentNotification.method,
           {
@@ -201,13 +200,6 @@ export class LspClientImpl implements LspClient {
             },
             contentChanges: [
               {
-                range: {
-                  start: { line: 0, character: 0 },
-                  end: {
-                    line: lines.length - 1,
-                    character: lines[lines.length - 1].length,
-                  },
-                },
                 text: contents,
               },
             ],
@@ -242,8 +234,8 @@ export class LspClientImpl implements LspClient {
   dispose() {
     try {
       this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
-      this.childProcess?.kill();
       this.connection?.dispose();
+      this.childProcess?.kill();
     } catch (e: any) {
       this.logger.error(e.toString?.());
     }

@@ -14,9 +14,6 @@ import { errorLogger, nullLogger } from "./logger";
 import * as protocol from "vscode-languageserver-protocol";
 import { spawn } from "child_process";
 import { flattenJson } from "./utils";
-import exp from "constants";
-import { error } from "console";
-import { version } from "os";
 describe("LSP protocol tests", () => {
 	let client: LspClientImpl;
 
@@ -53,7 +50,7 @@ describe("LSP protocol tests", () => {
 			.mockImplementation(async () => {
 				return {
 					connection: client_connection,
-					childProcess: spawn("cat"),
+					childProcess: spawn("ls"),
 				};
 			});
 		server_connection = rpc.createMessageConnection(
@@ -153,10 +150,6 @@ describe("LSP protocol tests", () => {
 						contentChanges: [
 							{
 								text: NEW_CONTENT,
-								range: {
-									start: { line: 0, character: 0 },
-									end: { line: 0, character: 11 },
-								},
 							},
 						],
 						textDocument: {
