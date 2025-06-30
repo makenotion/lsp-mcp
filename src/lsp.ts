@@ -4,8 +4,7 @@ import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { InitializeRequest } from "vscode-languageserver-protocol";
 import * as protocol from "vscode-languageserver-protocol";
 import { Logger } from "vscode-jsonrpc";
-import path from "path";
-
+import { flattenJson, JSONObject } from "./utils";
 export interface LspClient {
   id: string;
   languages: string[];
@@ -19,7 +18,6 @@ export interface LspClient {
 }
 
 export class LspClientImpl implements LspClient {
-
   protected childProcess: ChildProcess | undefined;
 
   protected connection: rpc.MessageConnection | undefined;
@@ -33,30 +31,39 @@ export class LspClientImpl implements LspClient {
     public readonly workspace: string,
     private readonly command: string,
     private readonly args: string[],
+    private readonly settings: object,
     private readonly logger: Logger, // TODO: better long term solution for logging
   ) {
     this.capabilities = undefined;
   }
+  async spawnChildProcess(): Promise<{
+    connection: rpc.MessageConnection;
+    childProcess: ChildProcess;
+  }> {
+    const childProcess = (this.childProcess = spawn(this.command, this.args));
 
+    if (!childProcess.stdout || !childProcess.stdin) {
+      throw new Error("Child process not started");
+    }
+    childProcess.stderr.on("data", (data) => {
+      this.logger.log(`lsp stderr: ${data}`);
+    });
+
+    const connection = (this.connection = rpc.createMessageConnection(
+      new StreamMessageReader(childProcess.stdout),
+      new StreamMessageWriter(childProcess.stdin),
+      this.logger,
+    ));
+    this.logger.log(`LSP: Spawning child process ${this.command} ${this.args}`);
+    return { connection, childProcess };
+  }
   public async start() {
     // TODO: This should return a promise if the LSP is still starting
     // Just don't call start() twice and it'll be fine :)
     if (this.isStarted()) {
       return;
     }
-
-    const childProcess = this.childProcess = spawn(this.command, this.args);
-
-    if (!childProcess.stdout || !childProcess.stdin) {
-      throw new Error("Child process not started");
-    }
-
-    const connection = this.connection = rpc.createMessageConnection(
-      new StreamMessageReader(childProcess.stdout),
-      new StreamMessageWriter(childProcess.stdin),
-      this.logger,
-    );
-
+    const { connection, childProcess } = await this.spawnChildProcess();
     connection.onError((error) => {
       this.logger.error(`Connection error: ${error}`);
       childProcess.kill();
@@ -66,7 +73,37 @@ export class LspClientImpl implements LspClient {
       this.logger.log("Connection closed");
       childProcess.kill();
     });
-
+    connection.onRequest(
+      protocol.ConfigurationRequest.type,
+      ({ items }: protocol.ConfigurationParams) => {
+        this.logger.log(
+          `LSP: Configuration request for ${items.length} items ${JSON.stringify(items)}`,
+        );
+        const response = items.map((element) => {
+          return this.settings;
+        });
+        this.logger.log(
+          `LSP: Configuration response for ${items.length} items ${JSON.stringify(response)}`,
+        );
+        return response;
+      },
+    );
+    connection.onNotification(
+      protocol.LogMessageNotification.type,
+      ({ message }) => {
+        this.logger.log(`LSP: ${message}`);
+      },
+    );
+    connection.onRequest(
+      protocol.ShowMessageRequest.type,
+      (
+        request: protocol.ShowMessageRequestParams,
+        ___: rpc.CancellationToken,
+      ): protocol.MessageActionItem | null => {
+        this.logger.log(`Unhandled request: ${JSON.stringify(request)}`);
+        return null;
+      },
+    );
     connection.onUnhandledNotification((notification) => {
       this.logger.log(`Unhandled notification: ${JSON.stringify(notification)}`);
     });
@@ -74,17 +111,35 @@ export class LspClientImpl implements LspClient {
     connection.listen();
 
     // TODO: We should figure out how to specify the capabilities we want
-    const capabilities: protocol.ClientCapabilities = {};
-
+    let capabilities: protocol.ClientCapabilities & JSONObject = {
+      workspace: {
+        configuration: true,
+      },
+    };
+    capabilities = flattenJson(capabilities);
     const uri = `file://${this.workspace}`;
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
       rootUri: uri,
       capabilities: capabilities,
+      initializationOptions: this.settings,
     });
+    this.logger.log(
+      `LSP init options ${JSON.stringify(this.settings, null, 2)}`,
+    );
 
-    this.logger.info(`Server LSP capabilities: ${JSON.stringify(response, null, 2)}`);
+    this.logger.info(
+      `Client LSP capabilities: ${JSON.stringify(capabilities, null, 2)}`,
+    );
+
+    this.logger.info(
+      `Server LSP capabilities: ${JSON.stringify(response, null, 2)}`,
+    );
     this.capabilities = response.capabilities;
+    await connection.sendNotification(
+      protocol.InitializedNotification.type,
+      {},
+    );
   }
 
   public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
