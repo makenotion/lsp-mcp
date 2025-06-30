@@ -148,6 +148,10 @@ export class LspClientImpl implements LspClient {
         },
         hover: {
           contentFormat: [protocol.MarkupKind.Markdown, protocol.MarkupKind.PlainText],
+        },
+        documentSymbol: {
+          symbolKind: { valueSet: Object.values(protocol.SymbolKind) },
+          hierarchicalDocumentSymbolSupport: true,
         }
       }
     };
