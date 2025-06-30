@@ -4,7 +4,6 @@ import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { InitializeRequest } from "vscode-languageserver-protocol";
 import * as protocol from "vscode-languageserver-protocol";
 import { Logger } from "vscode-jsonrpc";
-import { flattenJson, JSONObject } from "./utils";
 export interface LspClient {
   id: string;
   languages: string[];
@@ -111,12 +110,11 @@ export class LspClientImpl implements LspClient {
     connection.listen();
 
     // TODO: We should figure out how to specify the capabilities we want
-    let capabilities: protocol.ClientCapabilities & JSONObject = {
+    const capabilities: protocol.ClientCapabilities = {
       workspace: {
         configuration: true,
       },
     };
-    capabilities = flattenJson(capabilities);
     const uri = `file://${this.workspace}`;
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
