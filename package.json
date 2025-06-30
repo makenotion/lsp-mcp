@@ -38,7 +38,7 @@
     "dev:simple": "yarn dev --methods textDocument/documentSymbol",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
-    "test": "jest",
+    "test": "jest src",
     "mcp-cli:simple": "npx @wong2/mcp-cli --config dev/mcp-cli/simple.json",
     "mcp-cli:config": "npx @wong2/mcp-cli --config dev/mcp-cli/with-config.json",
     "mcp-cli:npx": "npx @wong2/mcp-cli --config dev/mcp-cli/npx.json",
