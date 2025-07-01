@@ -125,12 +125,31 @@ export class LspClientImpl implements LspClient {
       workspace: {
         configuration: true,
       },
+      general: {
+        markdown: {
+          parser: "Python-Markdown",
+          version: "3.2.2"
+        }
+      },
       textDocument: {
         synchronization: {
           dynamicRegistration: true,
           didSave: true,
         },
-      },
+        completion: {
+          completionItem: {
+            documentationFormat: [protocol.MarkupKind.Markdown, protocol.MarkupKind.PlainText],
+          }
+        },
+        signatureHelp: {
+          signatureInformation: {
+            documentationFormat: [protocol.MarkupKind.Markdown, protocol.MarkupKind.PlainText],
+          }
+        },
+        hover: {
+          contentFormat: [protocol.MarkupKind.Markdown, protocol.MarkupKind.PlainText],
+        }
+      }
     };
     const uri = `file://${this.workspace}`;
     const response = await connection.sendRequest(InitializeRequest.type, {
