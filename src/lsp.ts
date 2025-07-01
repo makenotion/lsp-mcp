@@ -14,6 +14,7 @@ export interface LspClient {
   dispose: () => void;
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
+  openFileContents(uri: string, contents: string): Promise<void>;
 }
 
 export class LspClientImpl implements LspClient {
@@ -22,6 +23,12 @@ export class LspClientImpl implements LspClient {
   protected connection: rpc.MessageConnection | undefined;
 
   public capabilities: protocol.ServerCapabilities | undefined;
+  private readonly files: {
+    [_: string]: {
+      content: string;
+      version: number;
+    };
+  };
 
   public constructor(
     public readonly id: string,
@@ -34,6 +41,7 @@ export class LspClientImpl implements LspClient {
     private readonly logger: Logger, // TODO: better long term solution for logging
   ) {
     this.capabilities = undefined;
+    this.files = {};
   }
   async spawnChildProcess(): Promise<{
     connection: rpc.MessageConnection;
@@ -63,6 +71,7 @@ export class LspClientImpl implements LspClient {
       return;
     }
     const { connection, childProcess } = await this.spawnChildProcess();
+    this.connection = connection;
     connection.onError((error) => {
       this.logger.error(`Connection error: ${error}`);
       childProcess.kill();
@@ -113,6 +122,12 @@ export class LspClientImpl implements LspClient {
     const capabilities: protocol.ClientCapabilities = {
       workspace: {
         configuration: true,
+      },
+      textDocument: {
+        synchronization: {
+          dynamicRegistration: true,
+          didSave: true,
+        },
       },
     };
     const uri = `file://${this.workspace}`;
@@ -169,9 +184,56 @@ export class LspClientImpl implements LspClient {
 
     return await this.connection.sendNotification(method, args);
   }
+  // Lets the LSP know about a file contents
+  public async openFileContents(uri: string, contents: string): Promise<void> {
+    if (uri in this.files) {
+      if (this.files[uri].content !== contents) {
+        this.logger.info(`LSP: File contents changed at ${uri}`);
+        const version = this.files[uri].version + 1;
+        this.files[uri] = { content: contents, version };
+        await this.sendNotification(
+          protocol.DidChangeTextDocumentNotification.method,
+          {
+            textDocument: {
+              uri: uri,
+              version: version,
+            },
+            contentChanges: [
+              {
+                text: contents,
+              },
+            ],
+          },
+        );
+        await this.sendNotification(
+          protocol.DidSaveTextDocumentNotification.method,
+          {
+            textDocument: {
+              uri: uri,
+            },
+            text: contents,
+          },
+        );
+      }
+    } else {
+      this.files[uri] = { content: contents, version: 1 };
+      await this.sendNotification(
+        protocol.DidOpenTextDocumentNotification.method,
+        {
+          textDocument: {
+            uri: uri,
+            languageId: "typescript",
+            version: 1,
+            text: contents,
+          },
+        },
+      );
+    }
+  }
 
   dispose() {
     try {
+      this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
       this.connection?.dispose();
       this.childProcess?.kill();
     } catch (e: any) {

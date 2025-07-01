@@ -40,14 +40,7 @@ function fileUriToPath(uri: string): string {
 
 // Let's the LSP know about a file contents
 export async function openFileContents(lsp: LspClient, uri: string, contents: string): Promise<void> {
-  await lsp.sendNotification(protocol.DidOpenTextDocumentNotification.method, {
-    textDocument: {
-      uri: uri,
-      languageId: "typescript",
-      version: 1,
-      text: contents,
-    },
-  });
+  await lsp.openFileContents(uri, contents);
 }
 
 // Let's the LSP know about a file
