@@ -81,6 +81,7 @@ describe("LSP protocol tests", () => {
 					capabilities: expect.any(Object),
 					processId: expect.any(Number),
 					rootUri: `file://${WORKSPACE}`,
+          workDoneToken: expect.any(String)
 				});
 
 				initialize = true;

@@ -1,9 +1,13 @@
 import { ChildProcess, spawn } from "child_process";
 import * as rpc from "vscode-jsonrpc";
 import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
-import { InitializeRequest } from "vscode-languageserver-protocol";
+import { InitializeRequest, WorkDoneProgressBegin, WorkDoneProgressEnd, WorkDoneProgressReport } from "vscode-languageserver-protocol";
 import * as protocol from "vscode-languageserver-protocol";
 import { Logger } from "vscode-jsonrpc";
+import { v4 as uuid } from 'uuid';
+import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
+import { convertLspToMcp } from "./progress";
+
 export interface LspClient {
   id: string;
   languages: string[];
@@ -16,6 +20,7 @@ export interface LspClient {
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents: string): Promise<void>;
+  registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
 }
 
 export class LspClientImpl implements LspClient {
@@ -117,6 +122,9 @@ export class LspClientImpl implements LspClient {
     connection.onUnhandledNotification((notification) => {
       this.logger.log(`Unhandled notification: ${JSON.stringify(notification)}`);
     });
+    connection.onRequest(protocol.WorkDoneProgressCreateRequest.type, ({ token }) => {
+      this.registerProgress(token)
+    })
 
     connection.listen();
 
@@ -153,14 +161,21 @@ export class LspClientImpl implements LspClient {
           symbolKind: { valueSet: Object.values(protocol.SymbolKind) },
           hierarchicalDocumentSymbolSupport: true,
         }
+      },
+      window: {
+        workDoneProgress: true
       }
     };
     const uri = `file://${this.workspace}`;
+    const token = this.registerProgress();
+
+
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
       rootUri: uri,
       capabilities: capabilities,
       initializationOptions: this.settings,
+      workDoneToken: token
     });
     this.logger.log(
       `LSP init options ${JSON.stringify(this.settings, null, 2)}`,
@@ -200,6 +215,22 @@ export class LspClientImpl implements LspClient {
     return await this.connection.sendRequest(method, args);
   }
 
+  registerProgress(token: rpc.ProgressToken = uuid(), callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken {
+    if (this.connection) {
+      this.connection.onProgress(
+        protocol.WorkDoneProgress.type,
+        token,
+        async (message) => {
+          this.logger.log(`LSP Progress: ${JSON.stringify(message)}`);
+          if (callback) {
+            let params = convertLspToMcp(message, token)
+            await callback(params);
+          }
+        },
+      );
+    }
+    return token
+  }
   async sendNotification(method: string, args: any): Promise<void> {
     if (!this.isStarted()) {
       await this.start();
