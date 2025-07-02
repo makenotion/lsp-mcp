@@ -1,9 +1,12 @@
 import { ChildProcess, spawn } from "child_process";
 import * as rpc from "vscode-jsonrpc";
 import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
-import { InitializeRequest } from "vscode-languageserver-protocol";
+import { InitializeRequest, WorkDoneProgressBegin, WorkDoneProgressEnd, WorkDoneProgressReport } from "vscode-languageserver-protocol";
 import * as protocol from "vscode-languageserver-protocol";
 import { Logger } from "vscode-jsonrpc";
+import { v4 as uuid } from 'uuid';
+import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
+
 export interface LspClient {
   id: string;
   languages: string[];
@@ -16,6 +19,7 @@ export interface LspClient {
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents: string): Promise<void>;
+  registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
 }
 
 export class LspClientImpl implements LspClient {
@@ -117,6 +121,9 @@ export class LspClientImpl implements LspClient {
     connection.onUnhandledNotification((notification) => {
       this.logger.log(`Unhandled notification: ${JSON.stringify(notification)}`);
     });
+    connection.onRequest(protocol.WorkDoneProgressCreateRequest.type, ({ token }) => {
+      this.registerProgress(token)
+    })
 
     connection.listen();
 
@@ -162,14 +169,21 @@ export class LspClientImpl implements LspClient {
           symbolKind: { valueSet: Object.values(protocol.SymbolKind) },
           hierarchicalDocumentSymbolSupport: true,
         }
+      },
+      window: {
+        workDoneProgress: true
       }
     };
     const uri = `file://${this.workspace}`;
+    const token = this.registerProgress();
+
+
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
       rootUri: uri,
       capabilities: capabilities,
       initializationOptions: this.settings,
+      workDoneToken: token
     });
     this.logger.log(
       `LSP init options ${JSON.stringify(this.settings, null, 2)}`,
@@ -209,6 +223,51 @@ export class LspClientImpl implements LspClient {
     return await this.connection.sendRequest(method, args);
   }
 
+  registerProgress(token: rpc.ProgressToken = uuid(), callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken {
+    if (this.connection) {
+      this.connection.onProgress(
+        protocol.WorkDoneProgress.type,
+        token,
+        async (message) => {
+          this.logger.log(`LSP Progress: ${JSON.stringify(message)}`);
+          if (callback) {
+            let params: {
+              progressToken: rpc.ProgressToken;
+              progress: number;
+              total?: number;
+              message?: string;
+
+            } = {
+              progressToken: token,
+              progress: 0
+            }
+            switch (message.kind) {
+              case "begin":
+                params["progress"] = message.percentage ?? 0
+                params["message"] = message.message ?? message.title
+                params["total"] = 100
+              case "report":
+                params["progress"] = message.percentage ?? 0
+                params["message"] = message.message ?? ""
+                params["total"] = 100
+              case "end":
+                params["progress"] = 100
+                params["message"] = message.message ?? ""
+                params["total"] = 100
+            }
+            if (params) {
+              await callback({
+                "method": "notifications/progress",
+                "params": params
+              });
+            }
+
+          }
+        },
+      );
+    }
+    return token
+  }
   async sendNotification(method: string, args: any): Promise<void> {
     if (!this.isStarted()) {
       await this.start();
