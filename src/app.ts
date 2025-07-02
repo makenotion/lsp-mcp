@@ -100,7 +100,18 @@ export class App {
         return JSON.stringify(result, null, 2)
       },
     });
-
+    this.toolManager.registerTool({
+      id: "get_diagnostics",
+      description: "Get all errors in the project",
+      inputSchema: {
+        type: "object" as "object",
+      },
+      handler: async () => {
+        const requests = this.lspManager.getLsps().map((lsp) => lsp.getDiagnostics())
+        const diagnostics = (await Promise.all(requests)).flat()
+        return JSON.stringify(diagnostics, null, 2)
+      }
+    })
     this.toolManager.registerTool({
       id: "file_contents_to_uri",
       description:

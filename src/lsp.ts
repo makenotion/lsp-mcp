@@ -7,6 +7,7 @@ import { Logger } from "vscode-jsonrpc";
 import { v4 as uuid } from 'uuid';
 import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
 import { convertLspToMcp } from "./progress";
+import { readFile } from "fs/promises";
 
 export interface LspClient {
   id: string;
@@ -21,9 +22,17 @@ export interface LspClient {
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents: string): Promise<void>;
   registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
+  getDiagnostics(): Promise<protocol.Diagnostic[]>;
 }
 
 export class LspClientImpl implements LspClient {
+  private diagnostics: {
+    [_: string]: {
+      diagnostics: protocol.Diagnostic[]
+      version?: number
+    }
+  }
+  private pendingProgress: Map<rpc.ProgressToken, Promise<void>>;
   protected childProcess: ChildProcess | undefined;
 
   protected connection: rpc.MessageConnection | undefined;
@@ -49,6 +58,8 @@ export class LspClientImpl implements LspClient {
   ) {
     this.capabilities = undefined;
     this.files = {};
+    this.diagnostics = {};
+    this.pendingProgress = new Map();
   }
   async spawnChildProcess(): Promise<{
     connection: rpc.MessageConnection;
@@ -115,13 +126,26 @@ export class LspClientImpl implements LspClient {
         this.logger.log(`LSP: ${message}`);
       },
     );
+    connection.onNotification(
+      protocol.PublishDiagnosticsNotification.type,
+      (notification) => { this.handleDiagnostics(notification) },
+    );
+    connection.onRequest(
+      protocol.ShowDocumentRequest.type,
+      (
+        request: protocol.ShowDocumentParams,
+      ) => {
+        this.logger.info(`Asked to show: ${JSON.stringify(request)}`);
+        return null;
+      },
+    );
     connection.onRequest(
       protocol.ShowMessageRequest.type,
       (
         request: protocol.ShowMessageRequestParams,
         ___: rpc.CancellationToken,
       ): protocol.MessageActionItem | null => {
-        this.logger.log(`Unhandled request: ${JSON.stringify(request)}`);
+        this.logger.warn(`Unhandled request: ${JSON.stringify(request)}`);
         return null;
       },
     );
@@ -160,6 +184,12 @@ export class LspClientImpl implements LspClient {
           dynamicRegistration: true,
           didSave: true,
         },
+        publishDiagnostics: {
+          tagSupport: {
+            valueSet: Object.values(protocol.DiagnosticTag),
+          },
+          versionSupport: true
+        },
         completion: {
           completionItem: {
             documentationFormat: [protocol.MarkupKind.Markdown, protocol.MarkupKind.PlainText],
@@ -179,7 +209,10 @@ export class LspClientImpl implements LspClient {
         }
       },
       window: {
-        workDoneProgress: true
+        workDoneProgress: true,
+        showDocument: {
+          support: true
+        }
       }
     };
     const token = this.registerProgress();
@@ -233,19 +266,33 @@ export class LspClientImpl implements LspClient {
   }
 
   registerProgress(token: rpc.ProgressToken = uuid(), callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken {
-    if (this.connection) {
-      this.connection.onProgress(
-        protocol.WorkDoneProgress.type,
-        token,
-        async (message) => {
-          this.logger.log(`LSP Progress: ${JSON.stringify(message)}`);
-          if (callback) {
-            let params = convertLspToMcp(message, token)
-            await callback(params);
-          }
-        },
-      );
+    const pending = new Promise<void>((resolve) => {
+      if (this.connection) {
+        this.connection.onProgress(
+          protocol.WorkDoneProgress.type,
+          token,
+          async (message) => {
+            this.logger.log(`LSP Progress: ${JSON.stringify(message)}`);
+            if (callback) {
+              let params = convertLspToMcp(message, token)
+              await callback(params);
+            }
+            switch (message.kind) {
+              case "begin":
+                this.pendingProgress.set(token, pending);
+                break
+              case "end":
+                resolve()
+                this.pendingProgress.delete(token);
+                break
+
+            }
+          },
+        );
+      }
     }
+    )
+
     return token
   }
   async sendNotification(method: string, args: any): Promise<void> {
@@ -303,7 +350,34 @@ export class LspClientImpl implements LspClient {
       );
     }
   }
-
+  async checkFiles() {
+    await Promise.all(Object.keys(this.files).map(async (uri) => {
+      const path = uri.split("file://")[1];
+      const contents = await readFile(path, "utf-8");
+      this.openFileContents(uri, contents)
+    }))
+  }
+  async waitForProgress() {
+    await Promise.all(this.pendingProgress.values())
+  }
+  public async getDiagnostics() {
+    await this.checkFiles();
+    await this.waitForProgress()
+    const ret: protocol.Diagnostic[] = []
+    for (const file in this.diagnostics) {
+      ret.push(...this.diagnostics[file].diagnostics)
+    }
+    return ret
+  }
+  handleDiagnostics(notification: protocol.PublishDiagnosticsParams): void {
+    this.diagnostics[notification.uri] = {
+      diagnostics: notification.diagnostics,
+      version: notification.version
+    }
+    if (notification.diagnostics.length >= 0) {
+      this.logger.log(`LSP: Recieved Diagnostics ${JSON.stringify(notification, null, 2)}`);
+    }
+  }
   async dispose() {
     try {
       await this.connection?.sendRequest(protocol.ShutdownRequest.type)
