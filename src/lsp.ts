@@ -44,6 +44,7 @@ export class LspClientImpl implements LspClient {
     public readonly eagerStartup: boolean,
     private readonly command: string,
     private readonly args: string[],
+    private readonly notifyMcp: (message: object) => Promise<void>,
     private readonly settings: object,
     private readonly logger: Logger, // TODO: better long term solution for logging
   ) {
@@ -115,6 +116,17 @@ export class LspClientImpl implements LspClient {
         this.logger.log(`LSP: ${message}`);
       },
     );
+    connection.onNotification(
+      protocol.PublishDiagnosticsNotification.type,
+      async (
+        notification: protocol.PublishDiagnosticsParams,
+      ): Promise<void> => {
+        if (notification.diagnostics.length >= 0) {
+          this.logger.log(`LSP: Publish diagnostics ${JSON.stringify(notification)}`);
+          await this.notifyMcp(notification)
+        }
+      },
+    );
     connection.onRequest(
       protocol.ShowMessageRequest.type,
       (
@@ -159,6 +171,11 @@ export class LspClientImpl implements LspClient {
         synchronization: {
           dynamicRegistration: true,
           didSave: true,
+        },
+        publishDiagnostics: {
+          tagSupport: {
+            valueSet: Object.values(protocol.DiagnosticTag),
+          }
         },
         completion: {
           completionItem: {

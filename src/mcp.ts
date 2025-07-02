@@ -12,6 +12,7 @@ export function createMcp(): McpServer {
     {
       capabilities: {
         tools: {},
+        logging: {},
       },
     },
   );
