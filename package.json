@@ -1,6 +1,6 @@
 {
   "name": "lsp-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": "git@github.com:jonrad/lsp-mcp.git",
@@ -47,9 +47,10 @@
   },
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^11.9.1",
-    "@modelcontextprotocol/sdk": "^1.5.0",
+    "@modelcontextprotocol/sdk": "^1.12.0",
     "commander": "^13.1.0",
     "strip-json-comments": "^5.0.1",
+    "uuid": "^11.1.0",
     "vscode-languageserver-protocol": "^3.17.5",
     "zod": "^3.24.2"
   }
