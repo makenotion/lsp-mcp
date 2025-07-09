@@ -293,6 +293,15 @@ export class App {
           lspConfig.eagerStartup ?? false,
           lspConfig.command,
           lspConfig.args,
+          async (message: object)=> {
+            await this.mcp.sendLoggingMessage({
+              level: "warning",
+
+              data: {
+                message
+              }
+            })
+          },
           flattenJson(lspConfig.settings ?? {}),
           logger,
         ),
