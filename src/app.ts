@@ -29,6 +29,7 @@ export class App {
   ) {
     // keeps track of all the tools we're sending to the MCP
     this.toolManager = new ToolManager(logger);
+    this.workspace = config.workspace ?? "/";
     // keeps track of all the LSP Clients we're using
     this.lspManager = new LspManager(this.buildLsps(config.lsps, logger));
     // the MCP server
@@ -36,7 +37,6 @@ export class App {
     // The LSP methods we support (textDocument/foo, etc)
     this.availableMethodIds = getLspMethods(config.methods);
 
-    this.workspace = config.workspace ?? "/";
 
     // Cleanup on any signal
     process.on('SIGINT', () => this.dispose());
