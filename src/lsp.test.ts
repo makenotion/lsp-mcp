@@ -111,11 +111,13 @@ describe("LSP protocol tests", () => {
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
 				async (params: protocol.InitializeParams) => {
+					const URI = `file://${WORKSPACE}`;
 					expect(params).toMatchObject({
 						initializationOptions: EXPECTED_SETTINGS,
 						capabilities: expect.any(Object),
 						processId: expect.any(Number),
-						rootUri: `file://${WORKSPACE}`,
+						rootUri: URI,
+						workspaceFolders: [expect.objectContaining({ uri: URI })],
 						trace: "verbose",
 					});
 					resolve();

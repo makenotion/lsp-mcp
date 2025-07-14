@@ -133,11 +133,21 @@ export class LspClientImpl implements LspClient {
     })
 
     connection.listen();
+    const uri = `file://${this.workspace}`;
+    const workspaceFolders = [{ "uri": uri, "name": "project" }]
+    connection.onRequest(
+      protocol.WorkspaceFoldersRequest.type,
+      (): protocol.WorkspaceFolder[] => {
+
+        return workspaceFolders;
+      },
+    );
 
     // TODO: We should figure out how to specify the capabilities we want
     const capabilities: protocol.ClientCapabilities = {
       workspace: {
         configuration: true,
+        workspaceFolders: true,
       },
       general: {
         markdown: {
@@ -172,7 +182,6 @@ export class LspClientImpl implements LspClient {
         workDoneProgress: true
       }
     };
-    const uri = `file://${this.workspace}`;
     const token = this.registerProgress();
 
     this.logger.log(`LSP workspae: ${uri}`);
@@ -182,6 +191,7 @@ export class LspClientImpl implements LspClient {
       capabilities: capabilities,
       initializationOptions: this.settings,
       workDoneToken: token,
+      workspaceFolders: workspaceFolders,
       trace: "verbose"
     });
     this.logger.log(
