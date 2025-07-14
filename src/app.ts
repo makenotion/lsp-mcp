@@ -57,13 +57,13 @@ export class App {
       };
     });
 
-    this.mcp.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.mcp.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name, arguments: args } = request.params;
       if (!args) {
         throw new Error("No arguments");
       }
 
-      const result = await this.toolManager.callTool(name, args);
+      const result = await this.toolManager.callTool(name, args, extra);
       const serialized =
         typeof result === "string" ? result : JSON.stringify(result, null, 2);
 
@@ -148,6 +148,7 @@ export class App {
       // Clean up the input schema a bit
       const inputSchema: JSONSchema4 = this.removeInputSchemaInvariants(method.inputSchema);
       const pagination = inputSchema.properties && inputSchema.properties["partialResultToken"] !== undefined;
+      const progress = inputSchema.properties && inputSchema.properties["workDoneToken"] !== undefined;
       if (inputSchema.properties) {
         for (const [propertyKey, property] of Object.entries(inputSchema.properties)) {
           if (["partialResultToken", "workDoneToken"].includes(propertyKey)) {
@@ -175,7 +176,7 @@ export class App {
         id: method.id.replace("/", "_"),
         description: method.description,
         inputSchema: inputSchema,
-        handler: async (args) => {
+        handler: async (args, { sendNotification, _meta }) => {
           let lsp: LspClient | undefined;
           if (lspProperty) {
             const lspId = args[lspProperty.name];
@@ -199,6 +200,14 @@ export class App {
           // I wonder if using the last used LSP would be a better default...
           if (!lsp) {
             lsp = this.lspManager.getDefaultLsp();
+          }
+          if (progress) {
+            if (_meta?.progressToken) {
+              args["workDoneToken"] = lsp.registerProgress(_meta.progressToken, sendNotification);
+
+            } else {
+              args["workDoneToken"] = lsp.registerProgress();
+            }
           }
 
           const result = await lspMethodHandler(lsp, id, args);

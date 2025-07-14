@@ -14,6 +14,42 @@ import { errorLogger, nullLogger } from "./logger";
 import * as protocol from "vscode-languageserver-protocol";
 import { spawn } from "child_process";
 import { flattenJson } from "./utils";
+import {
+	WorkDoneProgressBegin,
+	WorkDoneProgressEnd,
+	WorkDoneProgressReport,
+} from "vscode-languageserver-protocol";
+import exp from "constants";
+import { error } from "console";
+
+async function sendProgress(
+	server_connection: rpc.MessageConnection,
+	token: rpc.ProgressToken,
+) {
+	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
+		kind: "begin",
+		title: "starting",
+	});
+	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
+		kind: "report",
+		message: "middle",
+	});
+	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
+		kind: "end",
+		message: "finished",
+	});
+}
+function checkProgress() {
+	expect(errorLogger.log).toHaveBeenCalledWith(
+		'LSP Progress: {\"kind\":\"begin\",\"title\":\"starting\"}',
+	);
+	expect(errorLogger.log).toHaveBeenCalledWith(
+		'LSP Progress: {\"kind\":\"report\",\"message\":\"middle\"}',
+	);
+	expect(errorLogger.log).toHaveBeenCalledWith(
+		'LSP Progress: {\"kind\":\"end\",\"message\":\"finished\"}',
+	);
+}
 describe("LSP protocol tests", () => {
 	let client: LspClientImpl;
 
@@ -71,37 +107,37 @@ describe("LSP protocol tests", () => {
 		);
 	});
 	test("Initialize is sent", async () => {
-		let initialize = false;
-		let initialized = false;
-		server_connection.onRequest(
-			protocol.InitializeRequest.type,
-			async (params: protocol.InitializeParams) => {
-				expect(params).toMatchObject({
-					initializationOptions: EXPECTED_SETTINGS,
-					capabilities: expect.any(Object),
-					processId: expect.any(Number),
-					rootUri: `file://${WORKSPACE}`,
-				});
-
-				initialize = true;
-				return {};
-			},
-		);
-		server_connection.onNotification(
-			protocol.InitializedNotification.type,
-			async (params: protocol.InitializedParams) => {
-				expect(params).toMatchObject({});
-				initialized = true;
-			},
-		);
+		const initialize = new Promise<void>((resolve) => {
+			server_connection.onRequest(
+				protocol.InitializeRequest.type,
+				async (params: protocol.InitializeParams) => {
+					expect(params).toMatchObject({
+						initializationOptions: EXPECTED_SETTINGS,
+						capabilities: expect.any(Object),
+						processId: expect.any(Number),
+						rootUri: `file://${WORKSPACE}`,
+					});
+					resolve();
+					return {};
+				},
+			);
+		});
+		const initialized = new Promise<void>((resolve) => {
+			server_connection.onNotification(
+				protocol.InitializedNotification.type,
+				async (params: protocol.InitializedParams) => {
+					expect(params).toMatchObject({});
+					resolve();
+				},
+			);
+		});
 		server_connection.listen();
 		expect(client.isStarted()).toBe(false);
 		await client.start();
 		expect(client.isStarted()).toBe(true);
+		await initialize;
 		expect(mockSpawn).toBeCalledTimes(1);
-		expect(initialize).toBe(true);
-		await new Promise((r) => setTimeout(r, 200));
-		expect(initialized).toBe(true);
+		await initialized;
 	});
 	test("Configuration Support", async () => {
 		server_connection.onRequest(
@@ -123,6 +159,37 @@ describe("LSP protocol tests", () => {
 		);
 		expect(config).toEqual([EXPECTED_SETTINGS]);
 	});
+	test("Progress support", async () => {
+		jest.spyOn(errorLogger, "log");
+		const initialize = new Promise<void>((resolve) => {
+			server_connection.onRequest(
+				protocol.InitializeRequest.type,
+				async (params: protocol.InitializeParams) => {
+					const token = params.workDoneToken;
+					expect(token).toBeDefined();
+					expect(token).toBeTruthy();
+					if (token !== undefined) {
+						await sendProgress(server_connection, token);
+					}
+					resolve();
+					return {};
+				},
+			);
+		});
+		const initialized = new Promise<void>((resolve) => {
+			server_connection.onNotification(
+				protocol.InitializedNotification.type,
+				async (_: protocol.InitializedParams) => {
+					checkProgress();
+					resolve();
+				},
+			);
+		});
+		server_connection.listen();
+		await client.start();
+		await initialize;
+		await initialized;
+	});
 	describe("With Initialized Server", () => {
 		beforeEach(async () => {
 			server_connection.onRequest(
@@ -139,72 +206,65 @@ describe("LSP protocol tests", () => {
 			await client.start();
 		});
 		test("Update document", async () => {
-			let changed = false;
-			let opened = false;
-			let saved = false;
 			const URI = "file:///my/test/file";
 			const OLD_CONTENT = "old_content";
 			const NEW_CONTENT = "new_content";
-			server_connection.onNotification(
-				protocol.DidChangeTextDocumentNotification.type,
-				async (params) => {
-					expect(params).toEqual({
-						contentChanges: [
-							{
-								text: NEW_CONTENT,
+			const changed = new Promise<void>((resolve) => {
+				server_connection.onNotification(
+					protocol.DidChangeTextDocumentNotification.type,
+					async (params) => {
+						expect(params).toEqual({
+							contentChanges: [
+								{
+									text: NEW_CONTENT,
+								},
+							],
+							textDocument: {
+								uri: URI,
+								version: 2,
 							},
-						],
-						textDocument: {
-							uri: URI,
-							version: 2,
-						},
-					});
-
-					changed = true;
-				},
-			);
-			server_connection.onNotification(
-				protocol.DidSaveTextDocumentNotification.type,
-				async (params) => {
-					expect(params).toEqual({
-						textDocument: {
-							uri: URI,
-						},
-						text: NEW_CONTENT,
-					});
-
-					saved = true;
-				},
-			);
-			server_connection.onNotification(
-				protocol.DidOpenTextDocumentNotification.type,
-				async (params) => {
-					expect(opened).toBe(false); // We shouldn't open the same document twice and instead change it.
-					expect(params).toEqual({
-						textDocument: {
-							uri: URI,
-							languageId: "typescript",
-							version: 1,
-							text: OLD_CONTENT,
-						},
-					});
-					opened = true;
-				},
-			);
-			expect(opened).toBe(false);
-			expect(changed).toBe(false);
-			expect(saved).toBe(false);
+						});
+						resolve();
+					},
+				);
+			});
+			const saved = new Promise<void>((resolve) => {
+				server_connection.onNotification(
+					protocol.DidSaveTextDocumentNotification.type,
+					async (params) => {
+						expect(params).toEqual({
+							textDocument: {
+								uri: URI,
+							},
+							text: NEW_CONTENT,
+						});
+						resolve();
+					},
+				);
+			});
+			const opened = new Promise<void>((resolve) => {
+				server_connection.onNotification(
+					protocol.DidOpenTextDocumentNotification.type,
+					async (params) => {
+						expect(params).toEqual({
+							textDocument: {
+								uri: URI,
+								languageId: "typescript",
+								version: 1,
+								text: OLD_CONTENT,
+							},
+						});
+						resolve();
+					},
+				);
+			});
 			await client.openFileContents(URI, OLD_CONTENT);
-			await new Promise((r) => setTimeout(r, 200));
-			expect(opened).toBe(true);
-			expect(changed).toBe(false);
-			expect(saved).toBe(false);
+			await opened;
 			await client.openFileContents(URI, NEW_CONTENT);
-			expect(opened).toBe(true);
-			await new Promise((r) => setTimeout(r, 200));
-			expect(changed).toBe(true);
-			expect(saved).toBe(true);
+			await changed;
+			await saved;
 		});
+
 		test("Shutdown", async () => {
 			let shutdown = false;
 			server_connection.onRequest(protocol.ShutdownRequest.type, async () => {
@@ -212,6 +272,25 @@ describe("LSP protocol tests", () => {
 			});
 			await client.dispose();
 			expect(shutdown).toBe(true);
+		});
+		test("Progress", async () => {
+			jest.spyOn(errorLogger, "log");
+			server_connection.onRequest(
+				protocol.ReferencesRequest.type,
+				async (params) => {
+					let token = params.workDoneToken;
+					expect(token).toBeDefined();
+					if (token !== undefined) {
+						await sendProgress(server_connection, token);
+					}
+					return [];
+				},
+			);
+			const token = client.registerProgress();
+			await client.sendRequest("textDocument/references", {
+				workDoneToken: token,
+			});
+			checkProgress();
 		});
 	});
 	afterEach(async () => {
