@@ -109,6 +109,12 @@ export class LspClientImpl implements LspClient {
         this.logger.log(`LSP: ${message}`);
       },
     );
+    connection.onNotification(
+      protocol.LogTraceNotification.type,
+      ({ message }) => {
+        this.logger.log(`LSP: ${message}`);
+      },
+    );
     connection.onRequest(
       protocol.ShowMessageRequest.type,
       (
@@ -169,13 +175,14 @@ export class LspClientImpl implements LspClient {
     const uri = `file://${this.workspace}`;
     const token = this.registerProgress();
 
-
+    this.logger.log(`LSP workspae: ${uri}`);
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
       rootUri: uri,
       capabilities: capabilities,
       initializationOptions: this.settings,
-      workDoneToken: token
+      workDoneToken: token,
+      trace: "verbose"
     });
     this.logger.log(
       `LSP init options ${JSON.stringify(this.settings, null, 2)}`,

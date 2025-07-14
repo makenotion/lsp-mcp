@@ -116,6 +116,7 @@ describe("LSP protocol tests", () => {
 						capabilities: expect.any(Object),
 						processId: expect.any(Number),
 						rootUri: `file://${WORKSPACE}`,
+						trace: "verbose",
 					});
 					resolve();
 					return {};
@@ -291,6 +292,15 @@ describe("LSP protocol tests", () => {
 				workDoneToken: token,
 			});
 			checkProgress();
+		});
+		test("Logging", async () => {
+			jest.spyOn(errorLogger, "log");
+			server_connection.sendNotification(protocol.LogMessageNotification.type, {
+				message: "Test Message",
+				type: protocol.MessageType.Warning,
+			});
+			await client.dispose();
+			expect(errorLogger.log).toHaveBeenCalledWith("LSP: Test Message");
 		});
 	});
 	afterEach(async () => {
