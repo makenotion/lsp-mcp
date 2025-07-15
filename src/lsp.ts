@@ -108,9 +108,6 @@ export class LspClientImpl implements LspClient {
         const response = items.map((element) => {
           return this.settings;
         });
-        this.logger.log(
-          `LSP: Configuration response for ${items.length} items ${JSON.stringify(response)}`,
-        );
         return response;
       },
     );
@@ -227,17 +224,7 @@ export class LspClientImpl implements LspClient {
       workspaceFolders: workspaceFolders,
       trace: "verbose"
     });
-    this.logger.log(
-      `LSP init options ${JSON.stringify(this.settings, null, 2)}`,
-    );
 
-    this.logger.info(
-      `Client LSP capabilities: ${JSON.stringify(capabilities, null, 2)}`,
-    );
-
-    this.logger.info(
-      `Server LSP capabilities: ${JSON.stringify(response, null, 2)}`,
-    );
     this.capabilities = response.capabilities;
     await connection.sendNotification(
       protocol.InitializedNotification.type,
