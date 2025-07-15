@@ -14,6 +14,7 @@ import { errorLogger, nullLogger } from "./logger";
 import * as protocol from "vscode-languageserver-protocol";
 import { spawn } from "child_process";
 import { flattenJson } from "./utils";
+import { v4 as uuid } from "uuid";
 import {
 	WorkDoneProgressBegin,
 	WorkDoneProgressEnd,
@@ -37,6 +38,31 @@ async function sendProgress(
 	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
 		kind: "end",
 		message: "finished",
+	});
+}
+async function sendDiagnostics(
+	server_connection: rpc.MessageConnection,
+	uri: string,
+	diagnostics: protocol.Diagnostic[],
+) {
+	const token = uuid();
+	await server_connection.sendRequest(
+		protocol.WorkDoneProgressCreateRequest.type,
+		{ token },
+	);
+	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
+		kind: "begin",
+		title: "starting",
+	});
+	await server_connection.sendNotification(
+		protocol.PublishDiagnosticsNotification.type,
+		{
+			uri,
+			diagnostics,
+		},
+	);
+	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
+		kind: "end",
 	});
 }
 function checkProgress() {
@@ -194,6 +220,7 @@ describe("LSP protocol tests", () => {
 		await initialized;
 	});
 	describe("With Initialized Server", () => {
+		const URI = "file:///my/test/file";
 		beforeEach(async () => {
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
@@ -209,7 +236,6 @@ describe("LSP protocol tests", () => {
 			await client.start();
 		});
 		test("Update document", async () => {
-			const URI = "file:///my/test/file";
 			const OLD_CONTENT = "old_content";
 			const NEW_CONTENT = "new_content";
 			const changed = new Promise<void>((resolve) => {
@@ -294,6 +320,21 @@ describe("LSP protocol tests", () => {
 				workDoneToken: token,
 			});
 			checkProgress();
+		});
+		test("Diagnostics", async () => {
+			jest.spyOn(errorLogger, "log");
+			expect(await client.getDiagnostics()).toEqual([]);
+			const diagnostic: protocol.Diagnostic = {
+				range: {
+					start: { line: 1, character: 1 },
+					end: { line: 1, character: 1 },
+				},
+				message: "error",
+			};
+			await sendDiagnostics(server_connection, URI, [diagnostic]);
+			expect(await client.getDiagnostics()).toEqual([diagnostic]);
+			await sendDiagnostics(server_connection, URI, []);
+			expect(await client.getDiagnostics()).toEqual([]);
 		});
 		test("Logging", async () => {
 			jest.spyOn(errorLogger, "log");
