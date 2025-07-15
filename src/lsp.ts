@@ -214,14 +214,15 @@ export class LspClientImpl implements LspClient {
     };
     const token = this.registerProgress();
 
-    this.logger.log(`LSP workspae: ${uri}`);
+    this.logger.log(`LSP workspace: ${uri}`);
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
-      rootUri: uri,
+      rootPath: this.workspace, // Used for eslint
+      rootUri: uri, // Used by most lsps
       capabilities: capabilities,
       initializationOptions: this.settings,
       workDoneToken: token,
-      workspaceFolders: workspaceFolders,
+      workspaceFolders: workspaceFolders, // Technically correct approach
       trace: "verbose"
     });
 
