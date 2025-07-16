@@ -8,6 +8,8 @@ import { v4 as uuid } from 'uuid';
 import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
 import { convertLspToMcp } from "./progress";
 import { readFile } from "fs/promises";
+import { FileWatcher } from "./FileWatcher";
+import { log } from "console";
 
 export interface LspClient {
   id: string;
@@ -44,7 +46,9 @@ export class LspClientImpl implements LspClient {
       version: number;
     };
   };
-
+  private fileWatcher: FileWatcher;
+  private started: Promise<void> | undefined = undefined
+  private startedResolve: (() => void) | undefined = undefined
   public constructor(
     public readonly id: string,
     public readonly languages: string[],
@@ -61,6 +65,7 @@ export class LspClientImpl implements LspClient {
     this.files = {};
     this.diagnostics = {};
     this.pendingProgress = new Map();
+    this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri, contents) => this.openFileContents(uri, contents), (uri) => this.sendDidClose(uri), (uri, contents) => this.openFileContents(uri, contents));
   }
   async spawnChildProcess(): Promise<{
     connection: rpc.MessageConnection;
@@ -84,6 +89,7 @@ export class LspClientImpl implements LspClient {
     return { connection, childProcess };
   }
   public async start() {
+    this.started = new Promise<void>(resolve => { this.startedResolve = resolve })
     // TODO: This should return a promise if the LSP is still starting
     // Just don't call start() twice and it'll be fine :)
     if (this.isStarted()) {
@@ -238,6 +244,10 @@ export class LspClientImpl implements LspClient {
     if (this.waitForConfiguration) {
       await configured;
     }
+    await this.fileWatcher.start()
+    if (this.startedResolve !== undefined) {
+      this.startedResolve()
+    }
   }
 
   public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
@@ -299,50 +309,76 @@ export class LspClientImpl implements LspClient {
 
     return await this.connection.sendNotification(method, args);
   }
+  async sendDidClose(uri: string) {
+    if (this.files && uri in this.files) {
+      await this.sendNotification(
+        protocol.DidCloseTextDocumentNotification.method,
+        {
+          textDocument: {
+            uri: uri,
+          },
+        },
+      );
+      delete this.files[uri]
+    }
+  }
+  async sendDidOpen(uri: string, contents: string) {
+    await this.sendNotification(
+      protocol.DidOpenTextDocumentNotification.method,
+      {
+        textDocument: {
+          uri: uri,
+          languageId: "typescript",
+          version: 1,
+          text: contents,
+        },
+      },
+    );
+
+  }
+  async sendDidChange(uri: string, contents: string, version: number) {
+    await this.sendNotification(
+      protocol.DidChangeTextDocumentNotification.method,
+      {
+        textDocument: {
+          uri: uri,
+          version: version,
+        },
+        contentChanges: [
+          {
+            text: contents,
+          },
+        ],
+      },
+    );
+
+  }
+  async sendDidSave(uri: string, contents: string) {
+    await this.sendNotification(
+      protocol.DidSaveTextDocumentNotification.method,
+      {
+        textDocument: {
+          uri: uri,
+        },
+        text: contents,
+      },
+    );
+
+  }
   // Lets the LSP know about a file contents
   public async openFileContents(uri: string, contents: string): Promise<void> {
-    if (uri in this.files) {
+    await this.started
+    if (this.files && uri in this.files) {
       if (this.files[uri].content !== contents) {
         this.logger.info(`LSP: File contents changed at ${uri}`);
         const version = this.files[uri].version + 1;
         this.files[uri] = { content: contents, version };
-        await this.sendNotification(
-          protocol.DidChangeTextDocumentNotification.method,
-          {
-            textDocument: {
-              uri: uri,
-              version: version,
-            },
-            contentChanges: [
-              {
-                text: contents,
-              },
-            ],
-          },
-        );
-        await this.sendNotification(
-          protocol.DidSaveTextDocumentNotification.method,
-          {
-            textDocument: {
-              uri: uri,
-            },
-            text: contents,
-          },
-        );
+        await this.sendDidChange(uri, contents, version)
+        await this.sendDidSave(uri, contents)
       }
     } else {
       this.files[uri] = { content: contents, version: 1 };
-      await this.sendNotification(
-        protocol.DidOpenTextDocumentNotification.method,
-        {
-          textDocument: {
-            uri: uri,
-            languageId: "typescript",
-            version: 1,
-            text: contents,
-          },
-        },
-      );
+      await this.sendDidOpen(uri, contents)
     }
   }
   async checkFiles() {
@@ -375,6 +411,7 @@ export class LspClientImpl implements LspClient {
   }
   async dispose() {
     try {
+      await this.fileWatcher.dispose()
       await this.connection?.sendRequest(protocol.ShutdownRequest.type)
       this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
       this.connection?.dispose();
