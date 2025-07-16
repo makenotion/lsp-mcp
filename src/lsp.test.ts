@@ -22,6 +22,7 @@ import {
 } from "vscode-languageserver-protocol";
 import exp from "constants";
 import { error } from "console";
+import { mkdir, rm, rmdir, writeFile } from "node:fs/promises";
 
 async function sendProgress(
 	server_connection: rpc.MessageConnection,
@@ -80,7 +81,7 @@ describe("LSP protocol tests", () => {
 	let client: LspClientImpl;
 
 	let server_connection: rpc.MessageConnection;
-	const WORKSPACE = "my/test/workspace";
+	const WORKSPACE = "__test_workspace__";
 	const SETTINGS = {
 		test_setting: "test_value",
 		"test.subsection.subsection.value": "other value",
@@ -100,7 +101,7 @@ describe("LSP protocol tests", () => {
 	let mockSpawn: jest.SpiedFunction<
 		typeof LspClientImpl.prototype.spawnChildProcess
 	>;
-	beforeEach(() => {
+	beforeEach(async () => {
 		const [pair_a_read, pair_a_write] = duplexPair();
 		const [pair_b_read, pair_b_write] = duplexPair();
 		const client_connection = rpc.createMessageConnection(
@@ -123,7 +124,7 @@ describe("LSP protocol tests", () => {
 		client = new LspClientImpl(
 			"id",
 			[],
-			[],
+			["txt"],
 			WORKSPACE,
 			true,
 			false,
@@ -132,6 +133,7 @@ describe("LSP protocol tests", () => {
 			flattenJson(SETTINGS),
 			errorLogger,
 		);
+    await mkdir(WORKSPACE)
 	});
 	test("Initialize is sent", async () => {
 		const initialize = new Promise<void>((resolve) => {
@@ -221,7 +223,9 @@ describe("LSP protocol tests", () => {
 		await initialized;
 	});
 	describe("With Initialized Server", () => {
-		const URI = "file:///my/test/file";
+    const FILE_PATH = `${WORKSPACE}/file.txt`;
+		const URI = `file:///${FILE_PATH}`;
+		const ABSOLUTE_URI = `file://${process.cwd()}/${FILE_PATH}`;
 		beforeEach(async () => {
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
@@ -295,6 +299,64 @@ describe("LSP protocol tests", () => {
 			await saved;
 		});
 
+		test("Update document (FS events)", async () => {
+			const OLD_CONTENT = "old_content";
+			const NEW_CONTENT = "new_content";
+			const changed = new Promise<void>((resolve) => {
+				server_connection.onNotification(
+					protocol.DidChangeTextDocumentNotification.type,
+					async (params) => {
+						expect(params).toEqual({
+							contentChanges: [
+								{
+									text: NEW_CONTENT,
+								},
+							],
+							textDocument: {
+								uri: ABSOLUTE_URI,
+								version: 2,
+							},
+						});
+						resolve();
+					},
+				);
+			});
+			const saved = new Promise<void>((resolve) => {
+				server_connection.onNotification(
+					protocol.DidSaveTextDocumentNotification.type,
+					async (params) => {
+						expect(params).toEqual({
+							textDocument: {
+								uri: ABSOLUTE_URI,
+							},
+							text: NEW_CONTENT,
+						});
+						resolve();
+					},
+				);
+			});
+			const opened = new Promise<void>((resolve) => {
+				server_connection.onNotification(
+					protocol.DidOpenTextDocumentNotification.type,
+					async (params) => {
+						expect(params).toEqual({
+							textDocument: {
+								uri: ABSOLUTE_URI,
+								languageId: "typescript",
+								version: 1,
+								text: OLD_CONTENT,
+							},
+						});
+						resolve();
+					},
+				);
+			});
+      await writeFile(FILE_PATH, OLD_CONTENT)
+			await opened;
+      await writeFile(FILE_PATH, NEW_CONTENT)
+			await changed;
+			await saved;
+		});
 		test("Shutdown", async () => {
 			let shutdown = false;
 			server_connection.onRequest(protocol.ShutdownRequest.type, async () => {
@@ -350,5 +412,6 @@ describe("LSP protocol tests", () => {
 	afterEach(async () => {
 		await client.dispose();
 		server_connection?.dispose();
+    await rm(WORKSPACE, {recursive: true})
 	});
 });

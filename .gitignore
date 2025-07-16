@@ -315,3 +315,6 @@ dist
 
 # jetbrains IDEs
 .idea
+
+__test__/
+__test_workspace__

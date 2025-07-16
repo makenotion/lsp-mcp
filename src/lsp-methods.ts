@@ -25,7 +25,7 @@ export interface LSPMethods {
 }
 
 // Converts /path/to/file to file:///path/to/file
-function pathToFileUri(path: string): string {
+export function pathToFileUri(path: string): string {
   return `file://${path}`
 }
 

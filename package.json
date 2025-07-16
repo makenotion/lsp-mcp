@@ -1,6 +1,6 @@
 {
   "name": "lsp-mcp",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": "git@github.com:jonrad/lsp-mcp.git",
@@ -48,6 +48,7 @@
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^11.9.1",
     "@modelcontextprotocol/sdk": "^1.13.1",
+    "@parcel/watcher": "^2.5.1",
     "commander": "^13.1.0",
     "strip-json-comments": "^5.0.1",
     "uuid": "^11.1.0",
