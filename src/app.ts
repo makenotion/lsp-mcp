@@ -246,7 +246,7 @@ export class App {
   public async openFile(path: string) {
     for (const lsp of this.lspManager.getLsps()) {
       const uri = pathToFileUri(path)
-      await openFile(lsp, uri, path)
+      await openFile(lsp, path, uri)
     }
   }
   public async runTillFinished() {
