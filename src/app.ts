@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { getLspMethods, lspMethodHandler, LSPMethods, openFileContents } from "./lsp-methods";
+import { getLspMethods, lspMethodHandler, LSPMethods, openFile, openFileContents, pathToFileUri } from "./lsp-methods";
 import { ToolManager } from "./tool-manager";
 import { Logger } from "vscode-jsonrpc";
 import { Config } from "./config";
@@ -243,6 +243,12 @@ export class App {
     await startMcp(this.mcp, transport);
   }
 
+  public async openFile(path: string) {
+    for (const lsp of this.lspManager.getLsps()) {
+      const uri = pathToFileUri(path)
+      await openFile(lsp, uri, path)
+    }
+  }
   public async runTillFinished() {
     await stream.finished(process.stdin, {})
     await this.dispose()
