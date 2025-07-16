@@ -51,6 +51,7 @@ export class LspClientImpl implements LspClient {
     public readonly extensions: string[],
     public readonly workspace: string,
     public readonly eagerStartup: boolean,
+    private readonly waitForConfiguration: boolean,
     private readonly command: string,
     private readonly args: string[],
     private readonly settings: object,
@@ -99,18 +100,21 @@ export class LspClientImpl implements LspClient {
       this.logger.log("Connection closed");
       childProcess.kill();
     });
-    connection.onRequest(
-      protocol.ConfigurationRequest.type,
-      ({ items }: protocol.ConfigurationParams) => {
-        this.logger.log(
-          `LSP: Configuration request for ${items.length} items ${JSON.stringify(items)}`,
-        );
-        const response = items.map((element) => {
-          return this.settings;
-        });
-        return response;
-      },
-    );
+    const configured = new Promise<void>((resolve) => {
+      connection.onRequest(
+        protocol.ConfigurationRequest.type,
+        ({ items }: protocol.ConfigurationParams) => {
+          this.logger.log(
+            `LSP: Configuration request for ${items.length} items ${JSON.stringify(items)}`,
+          );
+          const response = items.map((element) => {
+            return this.settings;
+          });
+          resolve()
+          return response;
+        },
+      );
+    })
     connection.onNotification(
       protocol.LogMessageNotification.type,
       ({ message }) => {
@@ -231,6 +235,9 @@ export class LspClientImpl implements LspClient {
       protocol.InitializedNotification.type,
       {},
     );
+    if (this.waitForConfiguration) {
+      await configured;
+    }
   }
 
   public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {

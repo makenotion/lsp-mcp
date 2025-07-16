@@ -251,7 +251,7 @@ export class App {
   public async dispose() {
     this.logger.info("Shutting down...");
     if (this.lspManager !== undefined) {
-     for (const lsp of this.lspManager.getLsps()) {
+      for (const lsp of this.lspManager.getLsps()) {
         await lsp.dispose();
       }
     }
@@ -302,6 +302,7 @@ export class App {
           lspConfig.extensions,
           this.workspace,
           lspConfig.eagerStartup ?? false,
+          lspConfig.waitForConfiguration ?? false,
           lspConfig.command,
           lspConfig.args,
           flattenJson(lspConfig.settings ?? {}),

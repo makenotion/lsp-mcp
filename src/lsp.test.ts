@@ -126,6 +126,7 @@ describe("LSP protocol tests", () => {
 			[],
 			WORKSPACE,
 			true,
+			false,
 			"",
 			[],
 			flattenJson(SETTINGS),
