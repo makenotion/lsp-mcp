@@ -44,7 +44,7 @@ export async function openFileContents(lsp: LspClient, uri: string, contents: st
 }
 
 // Let's the LSP know about a file
-async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
+export async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
   const contents = await fs.readFile(file, "utf8");
   await openFileContents(lsp, uri, contents);
 }
