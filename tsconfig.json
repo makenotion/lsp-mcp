@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "NodeNext",
     "strict": true,
     "outDir": "dist",
@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "forceConsistentCasingInFileNames": true,
+    "sourceMap": true
   },
   "include": [
     "src"
