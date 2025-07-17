@@ -120,6 +120,7 @@ describe("LSP protocol tests", () => {
 			WORKSPACE,
 			true,
 			false,
+			false,
 			"",
 			[],
 			flattenJson(SETTINGS),
@@ -395,11 +396,27 @@ describe("LSP protocol tests", () => {
 				},
 				message: "error",
 			}
-			await sendDiagnostics(server_connection, URI, [diagnostic])
+			// The file needs to be opened to have diagnostics
+			await writeFile(FILE_PATH, "testContent")
+			await new Promise<void>(resolve =>
+				server_connection.onNotification(
+					protocol.DidOpenTextDocumentNotification.type,
+					(_: protocol.DidOpenTextDocumentParams) => resolve(),
+				),
+			)
+			await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
 			expect(await client.getDiagnostics()).toEqual([diagnostic])
-			await sendDiagnostics(server_connection, URI, [])
+			// The file needs to be changed to get new diagnostics
+			await writeFile(FILE_PATH, "testContent2")
+			await new Promise<void>(resolve =>
+				server_connection.onNotification(
+					protocol.DidChangeTextDocumentNotification.type,
+					(_: protocol.DidChangeTextDocumentParams) => resolve(),
+				),
+			)
+			await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
 			expect(await client.getDiagnostics()).toEqual([])
-		})
+		}, 10000)
 		test("Logging", async () => {
 			vi.spyOn(errorLogger, "log")
 			server_connection.sendNotification(protocol.LogMessageNotification.type, {

@@ -244,10 +244,10 @@ export class App {
   }
 
   public async openFile(path: string) {
-    for (const lsp of this.lspManager.getLsps()) {
+    await Promise.all(this.lspManager.getLsps().map(async (lsp) => {
       const uri = pathToFileUri(path)
       await openFile(lsp, path, uri)
-    }
+    }))
   }
   public async runTillFinished() {
     await stream.finished(process.stdin, {})
@@ -309,6 +309,7 @@ export class App {
           this.workspace,
           lspConfig.eagerStartup ?? false,
           lspConfig.waitForConfiguration ?? false,
+          lspConfig.strictDiagnostics ?? false,
           lspConfig.command,
           lspConfig.args,
           flattenJson(lspConfig.settings ?? {}),

@@ -9,7 +9,8 @@ import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
 import { convertLspToMcp } from "./progress";
 import { readFile } from "fs/promises";
 import { FileWatcher } from "./FileWatcher";
-import { log } from "console";
+import { setTimeout } from "timers/promises";
+import { readFileSync } from "fs";
 
 export interface LspClient {
   id: string;
@@ -28,12 +29,6 @@ export interface LspClient {
 }
 
 export class LspClientImpl implements LspClient {
-  private diagnostics: {
-    [_: string]: {
-      diagnostics: protocol.Diagnostic[]
-      version?: number
-    }
-  }
   private pendingProgress: Map<rpc.ProgressToken, Promise<void>>;
   protected childProcess: ChildProcess | undefined;
 
@@ -44,11 +39,12 @@ export class LspClientImpl implements LspClient {
     [_: string]: {
       content: string;
       version: number;
+      reportDiagnostics: ((_: protocol.Diagnostic[]) => void),
+      resolvedDiagnostics: Promise<protocol.Diagnostic[]>,
     };
   };
   private fileWatcher: FileWatcher;
   private started: Promise<void> | undefined = undefined
-  private startedResolve: (() => void) | undefined = undefined
   public constructor(
     public readonly id: string,
     public readonly languages: string[],
@@ -56,6 +52,7 @@ export class LspClientImpl implements LspClient {
     public readonly workspace: string,
     public readonly eagerStartup: boolean,
     private readonly waitForConfiguration: boolean,
+    private readonly strictDiagnostics: boolean,
     private readonly command: string,
     private readonly args: string[],
     private readonly settings: object,
@@ -63,7 +60,6 @@ export class LspClientImpl implements LspClient {
   ) {
     this.capabilities = undefined;
     this.files = {};
-    this.diagnostics = {};
     this.pendingProgress = new Map();
     this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri, contents) => this.openFileContents(uri, contents), (uri) => this.sendDidClose(uri), (uri, contents) => this.openFileContents(uri, contents));
   }
@@ -89,7 +85,8 @@ export class LspClientImpl implements LspClient {
     return { connection, childProcess };
   }
   public async start() {
-    this.started = new Promise<void>(resolve => { this.startedResolve = resolve })
+    let { promise: started, resolve: startedResolve, reject: _ } = Promise.withResolvers<void>()
+    this.started = started
     // TODO: This should return a promise if the LSP is still starting
     // Just don't call start() twice and it'll be fine :)
     if (this.isStarted()) {
@@ -245,9 +242,7 @@ export class LspClientImpl implements LspClient {
       await configured;
     }
     await this.fileWatcher.start()
-    if (this.startedResolve !== undefined) {
-      this.startedResolve()
-    }
+    startedResolve()
   }
 
   public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
@@ -261,9 +256,7 @@ export class LspClientImpl implements LspClient {
   }
 
   async sendRequest(method: string, args: any): Promise<any> {
-    if (!this.isStarted()) {
-      await this.start();
-    }
+    await this.started
 
     this.assertStarted();
 
@@ -370,16 +363,20 @@ export class LspClientImpl implements LspClient {
   // Lets the LSP know about a file contents
   public async openFileContents(uri: string, contents: string): Promise<void> {
     await this.started
+    const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
     if (this.files && uri in this.files) {
       if (this.files[uri].content !== contents) {
+        if (this.strictDiagnostics) {
+          await this.files[uri].resolvedDiagnostics
+        }
         this.logger.info(`LSP: File contents changed at ${uri}`);
         const version = this.files[uri].version + 1;
-        this.files[uri] = { content: contents, version };
+        this.files[uri] = { content: contents, version, resolvedDiagnostics, reportDiagnostics };
         await this.sendDidChange(uri, contents, version)
         await this.sendDidSave(uri, contents)
       }
     } else {
-      this.files[uri] = { content: contents, version: 1 };
+      this.files[uri] = { content: contents, version: 1, resolvedDiagnostics, reportDiagnostics };
       await this.sendDidOpen(uri, contents)
     }
   }
@@ -387,7 +384,7 @@ export class LspClientImpl implements LspClient {
     await Promise.all(Object.keys(this.files).map(async (uri) => {
       const path = uri.split("file://")[1];
       const contents = await readFile(path, "utf-8");
-      this.openFileContents(uri, contents)
+      await this.openFileContents(uri, contents)
     }))
   }
   async waitForProgress() {
@@ -395,19 +392,33 @@ export class LspClientImpl implements LspClient {
   }
   public async getDiagnostics() {
     await this.checkFiles();
+    // Wait for any workDoneProgress requests to complete.
+    // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
     await this.waitForProgress()
-    const ret: protocol.Diagnostic[] = []
-    for (const file in this.diagnostics) {
-      ret.push(...this.diagnostics[file].diagnostics)
-    }
-    return ret
+    return (await Promise.all(Object.keys(this.files).map((uri) =>
+      this.files[uri].resolvedDiagnostics
+    ))).flat()
   }
   handleDiagnostics(notification: protocol.PublishDiagnosticsParams): void {
-    this.diagnostics[notification.uri] = {
-      diagnostics: notification.diagnostics,
-      version: notification.version
+    if (notification.uri in this.files) {
+      if (notification.version && notification.version !== this.files[notification.uri].version) {
+        this.logger.warn("Rejecting outdated diagnostics for " + notification.uri)
+        return
+      }
+      this.files[notification.uri].reportDiagnostics(notification.diagnostics)
+    } else {
+      this.logger.info("LSP: Recieved diagnostics for file wasn't opened " + notification.uri)
+      for (const file in this.files) {
+        // There is a condition where we may open files A and B, but the LSP may report diagnostics for B and C.
+        // To handle this, if we get an unknown file, we will wait for diagnostics to be reported on it. But if they aren't within 3000ms, we can use the file C diagnostics as a default.
+        const old = this.files[file].resolvedDiagnostics
+        this.files[file].resolvedDiagnostics = Promise.race([old, setTimeout(3000).then(() => {
+          this.files[file].reportDiagnostics(notification.diagnostics)
+          return notification.diagnostics
+        })])
+      }
     }
-    if (notification.diagnostics.length >= 0) {
+    if (notification.diagnostics.length > 0) {
       this.logger.log(`LSP: Recieved Diagnostics ${JSON.stringify(notification, null, 2)}`);
     }
   }
