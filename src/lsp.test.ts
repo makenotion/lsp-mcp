@@ -221,7 +221,8 @@ describe("LSP protocol tests", () => {
 	describe("With Initialized Server", () => {
 		const FILE_PATH = `${WORKSPACE}/file.txt`
 		const URI = `file:///${FILE_PATH}`
-		const ABSOLUTE_URI = `file://${process.cwd()}/${FILE_PATH}`
+		const ABSOLUTE_FILE_PATH = `${process.cwd()}/${FILE_PATH}`
+		const ABSOLUTE_URI = `file://${ABSOLUTE_FILE_PATH}`
 		beforeEach(async () => {
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
@@ -386,6 +387,26 @@ describe("LSP protocol tests", () => {
 			})
 			checkProgress()
 		})
+		test("Diagnostics (Single File)", async () => {
+			vi.spyOn(errorLogger, "log")
+			const diagnostic: protocol.Diagnostic = {
+				range: {
+					start: { line: 1, character: 1 },
+					end: { line: 1, character: 1 },
+				},
+				message: "error",
+			}
+			// The file needs to be opened to have diagnostics
+			await writeFile(FILE_PATH, "testContent")
+			let getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
+			await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
+			expect(await getter).toEqual([diagnostic])
+			// The file needs to be changed to get new diagnostics
+			await writeFile(FILE_PATH, "testContent2")
+			getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
+			await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
+			expect(await getter).toEqual([])
+		}, 10000)
 		test("Diagnostics", async () => {
 			vi.spyOn(errorLogger, "log")
 			expect(await client.getDiagnostics()).toEqual([])
