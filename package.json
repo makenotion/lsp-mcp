@@ -20,6 +20,8 @@
     "eslint": "9.28.0",
     "eslint-config-prettier": "10.1.5",
     "eslint-plugin-prettier": "5.5.1",
+    "@biomejs/biome": "^2.1.2",
+    "lefthook": "^1.12.2",
     "prettier": "3.6.2",
     "rimraf": "6.0.1",
     "ts-node": "10.9.2",
@@ -52,6 +54,9 @@
     "uuid": "^11.1.0",
     "vscode-languageserver-protocol": "^3.17.5",
     "zod": "^3.24.2"
+  },
+  "engines": {
+    "node": ">= 20.0.0"
   },
   "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }
