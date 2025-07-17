@@ -354,15 +354,17 @@ export class LspClientImpl implements LspClient {
 
   }
   async sendDidSave(uri: string, contents: string) {
-    await this.sendNotification(
-      protocol.DidSaveTextDocumentNotification.method,
-      {
-        textDocument: {
-          uri: uri,
+    if (typeof this.capabilities?.textDocumentSync === "object" && this.capabilities?.textDocumentSync?.save) {
+      await this.sendNotification(
+        protocol.DidSaveTextDocumentNotification.method,
+        {
+          textDocument: {
+            uri: uri,
+          },
+          text: contents,
         },
-        text: contents,
-      },
-    );
+      );
+    }
 
   }
   // Lets the LSP know about a file contents
