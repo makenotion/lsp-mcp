@@ -229,7 +229,13 @@ describe("LSP protocol tests", () => {
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
 				async (params: protocol.InitializeParams) => {
-					return { capabilities: {} };
+					return {
+						capabilities: {
+							textDocumentSync: {
+								save: true,
+							},
+						},
+					};
 				},
 			);
 			server_connection.onNotification(
