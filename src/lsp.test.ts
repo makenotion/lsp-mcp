@@ -3,9 +3,10 @@ import {
 	describe,
 	test,
 	afterEach,
-	jest,
+	vi,
 	expect,
-} from "@jest/globals";
+	MockInstance,
+} from "vitest";
 import * as rpc from "vscode-jsonrpc";
 import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node";
 import { duplexPair } from "stream";
@@ -98,9 +99,7 @@ describe("LSP protocol tests", () => {
 			},
 		},
 	};
-	let mockSpawn: jest.SpiedFunction<
-		typeof LspClientImpl.prototype.spawnChildProcess
-	>;
+	let mockSpawn: MockInstance<typeof LspClientImpl.prototype.spawnChildProcess>;
 	beforeEach(async () => {
 		const [pair_a_read, pair_a_write] = duplexPair();
 		const [pair_b_read, pair_b_write] = duplexPair();
@@ -108,7 +107,7 @@ describe("LSP protocol tests", () => {
 			new StreamMessageReader(pair_a_read),
 			new StreamMessageWriter(pair_b_write),
 		);
-		mockSpawn = jest
+		mockSpawn = vi
 			.spyOn(LspClientImpl.prototype, "spawnChildProcess")
 			.mockImplementation(async () => {
 				return {
@@ -133,7 +132,7 @@ describe("LSP protocol tests", () => {
 			flattenJson(SETTINGS),
 			errorLogger,
 		);
-    await mkdir(WORKSPACE)
+		await mkdir(WORKSPACE);
 	});
 	test("Initialize is sent", async () => {
 		const initialize = new Promise<void>((resolve) => {
@@ -192,7 +191,7 @@ describe("LSP protocol tests", () => {
 		expect(config).toEqual([EXPECTED_SETTINGS]);
 	});
 	test("Progress support", async () => {
-		jest.spyOn(errorLogger, "log");
+		vi.spyOn(errorLogger, "log");
 		const initialize = new Promise<void>((resolve) => {
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
@@ -223,7 +222,7 @@ describe("LSP protocol tests", () => {
 		await initialized;
 	});
 	describe("With Initialized Server", () => {
-    const FILE_PATH = `${WORKSPACE}/file.txt`;
+		const FILE_PATH = `${WORKSPACE}/file.txt`;
 		const URI = `file:///${FILE_PATH}`;
 		const ABSOLUTE_URI = `file://${process.cwd()}/${FILE_PATH}`;
 		beforeEach(async () => {
@@ -351,9 +350,9 @@ describe("LSP protocol tests", () => {
 					},
 				);
 			});
-      await writeFile(FILE_PATH, OLD_CONTENT)
+			await writeFile(FILE_PATH, OLD_CONTENT);
 			await opened;
-      await writeFile(FILE_PATH, NEW_CONTENT)
+			await writeFile(FILE_PATH, NEW_CONTENT);
 			await changed;
 			await saved;
 		});
@@ -366,7 +365,7 @@ describe("LSP protocol tests", () => {
 			expect(shutdown).toBe(true);
 		});
 		test("Progress", async () => {
-			jest.spyOn(errorLogger, "log");
+			vi.spyOn(errorLogger, "log");
 			server_connection.onRequest(
 				protocol.ReferencesRequest.type,
 				async (params) => {
@@ -385,7 +384,7 @@ describe("LSP protocol tests", () => {
 			checkProgress();
 		});
 		test("Diagnostics", async () => {
-			jest.spyOn(errorLogger, "log");
+			vi.spyOn(errorLogger, "log");
 			expect(await client.getDiagnostics()).toEqual([]);
 			const diagnostic: protocol.Diagnostic = {
 				range: {
@@ -400,7 +399,7 @@ describe("LSP protocol tests", () => {
 			expect(await client.getDiagnostics()).toEqual([]);
 		});
 		test("Logging", async () => {
-			jest.spyOn(errorLogger, "log");
+			vi.spyOn(errorLogger, "log");
 			server_connection.sendNotification(protocol.LogMessageNotification.type, {
 				message: "Test Message",
 				type: protocol.MessageType.Warning,
@@ -412,6 +411,6 @@ describe("LSP protocol tests", () => {
 	afterEach(async () => {
 		await client.dispose();
 		server_connection?.dispose();
-    await rm(WORKSPACE, {recursive: true})
+		await rm(WORKSPACE, { recursive: true });
 	});
 });

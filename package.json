@@ -14,20 +14,18 @@
     "resources"
   ],
   "devDependencies": {
-    "@jest/globals": "29.7.0",
     "@types/node": "^22.13.5",
     "@typescript-eslint/eslint-plugin": "8.33.1",
     "@typescript-eslint/parser": "8.33.1",
     "eslint": "9.28.0",
     "eslint-config-prettier": "10.1.5",
     "eslint-plugin-prettier": "5.5.1",
-    "jest": "29.7.0",
     "prettier": "3.6.2",
     "rimraf": "6.0.1",
-    "ts-jest": "29.4.0",
     "ts-node": "10.9.2",
     "typescript": "^5.8.2",
-    "typescript-language-server": "^4.3.3"
+    "typescript-language-server": "^4.3.3",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "build": "tsc && rimraf dist/resources && cp -R src/resources dist/",
@@ -38,7 +36,7 @@
     "dev:simple": "yarn dev --methods textDocument/documentSymbol",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
-    "test": "jest src",
+    "test": "vitest src",
     "mcp-cli:simple": "npx @wong2/mcp-cli --config dev/mcp-cli/simple.json",
     "mcp-cli:config": "npx @wong2/mcp-cli --config dev/mcp-cli/with-config.json",
     "mcp-cli:npx": "npx @wong2/mcp-cli --config dev/mcp-cli/npx.json",
