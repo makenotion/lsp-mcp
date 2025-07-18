@@ -154,6 +154,16 @@ export class LspClientImpl implements LspClient {
         return null;
       },
     );
+    connection.onRequest(
+      protocol.RegistrationRequest.type,
+      (
+        request: protocol.RegistrationParams,
+        ___: rpc.CancellationToken,
+      ) => {
+        this.logger.warn(`Unhandled request: ${JSON.stringify(request)}`);
+        return null;
+      },
+    );
     connection.onUnhandledNotification((notification) => {
       this.logger.log(`Unhandled notification: ${JSON.stringify(notification)}`);
     });
