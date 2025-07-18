@@ -1,0 +1,72 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
+	"formatter": {
+		"enabled": true
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"style": {
+				"useBlockStatements": "error",
+				"useSelfClosingElements": "error"
+			},
+			"correctness": {
+				"noUnreachable": "error"
+			},
+			"suspicious": {
+				"noAsyncPromiseExecutor": "error",
+				"noDuplicateCase": "error",
+				"noDoubleEquals": {
+					"level": "error",
+					"options": {
+						"ignoreNull": false
+					}
+				},
+				"noConsole": {
+					"level": "error",
+					"options": {
+						"allow": [
+							"info",
+							"group",
+							"groupCollapsed",
+							"groupEnd",
+							"table",
+							"time",
+							"timeEnd"
+						]
+					}
+				},
+				"noDebugger": "error",
+				"noFallthroughSwitchClause": "error",
+				"noFocusedTests": "error"
+			}
+		}
+	},
+	"assist": {
+		"enabled": true
+	},
+	"files": {
+		"includes": [
+			"src/*.test.ts",
+			"src/progress.ts",
+			"src/paginate.ts",
+			"src/FileWatcher.ts",
+			"biome.jsonc",
+			"lefthook.yml",
+			".github/*/*.yml"
+		]
+	},
+	"javascript": {
+		"jsxRuntime": "reactClassic",
+		"formatter": {
+			"arrowParentheses": "asNeeded",
+			"semicolons": "asNeeded"
+		}
+	},
+	"vcs": {
+		"clientKind": "git",
+		"defaultBranch": "main",
+		"enabled": true,
+		"useIgnoreFile": true
+	}
+}

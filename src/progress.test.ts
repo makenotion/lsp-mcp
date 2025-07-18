@@ -1,13 +1,13 @@
-import { describe, test, expect } from "vitest";
-import { convertLspToMcp } from "./progress";
-import {
+import { describe, expect, test } from "vitest"
+import type {
 	WorkDoneProgressBegin,
 	WorkDoneProgressEnd,
 	WorkDoneProgressReport,
-} from "vscode-languageserver-protocol";
+} from "vscode-languageserver-protocol"
+import { convertLspToMcp } from "./progress"
 
 describe("Progress Reporting conversion", () => {
-	const testToken = "test-token";
+	const testToken = "test-token"
 
 	test.each([
 		// WorkDoneProgressBegin tests
@@ -118,19 +118,19 @@ describe("Progress Reporting conversion", () => {
 			},
 		},
 	])("$name", ({ input, expected }) => {
-		const result = convertLspToMcp(input, testToken);
-		expect(result).toEqual(expected);
-	});
+		const result = convertLspToMcp(input, testToken)
+		expect(result).toEqual(expected)
+	})
 
 	test("handles different token types", () => {
 		const beginMessage: WorkDoneProgressBegin = {
 			kind: "begin",
 			title: "Test",
-		};
+		}
 
-		const numericToken = 12345;
-		const result = convertLspToMcp(beginMessage, numericToken);
+		const numericToken = 12345
+		const result = convertLspToMcp(beginMessage, numericToken)
 
-		expect(result.params.progressToken).toBe(numericToken);
-	});
-});
+		expect(result.params.progressToken).toBe(numericToken)
+	})
+})
