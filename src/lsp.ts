@@ -11,6 +11,7 @@ import { readFile } from "fs/promises";
 import { FileWatcher } from "./FileWatcher";
 import { setTimeout } from "timers/promises";
 import { readFileSync } from "fs";
+import { pathToFileUri } from "./lsp-methods";
 
 export interface LspClient {
   id: string;
@@ -25,7 +26,7 @@ export interface LspClient {
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents: string): Promise<void>;
   registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
-  getDiagnostics(): Promise<protocol.Diagnostic[]>;
+  getDiagnostics(file?: string): Promise<protocol.Diagnostic[]>;
 }
 
 export class LspClientImpl implements LspClient {
@@ -192,7 +193,10 @@ export class LspClientImpl implements LspClient {
           tagSupport: {
             valueSet: Object.values(protocol.DiagnosticTag),
           },
-          versionSupport: true
+          versionSupport: true,
+          relatedInformation: true,
+          dataSupport: true,
+          codeDescriptionSupport: true,
         },
         completion: {
           completionItem: {
@@ -390,11 +394,19 @@ export class LspClientImpl implements LspClient {
   async waitForProgress() {
     await Promise.all(this.pendingProgress.values())
   }
-  public async getDiagnostics() {
+  public async getDiagnostics(file?: string) {
+    // If we're given a specific file, the agent may have called it without modifying it or opening it. This means we need to open it manually.
+    if (file !== undefined) {
+      await this.openFileContents(pathToFileUri(file), await readFile(file, "utf-8"))
+    }
+    // Read all the files that have been opened and send change requests as appropriate.
     await this.checkFiles();
     // Wait for any workDoneProgress requests to complete.
     // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
     await this.waitForProgress()
+    if (file !== undefined) {
+      return await this.files[pathToFileUri(file)].resolvedDiagnostics
+    }
     return (await Promise.all(Object.keys(this.files).map((uri) =>
       this.files[uri].resolvedDiagnostics
     ))).flat()

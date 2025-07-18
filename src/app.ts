@@ -102,12 +102,17 @@ export class App {
     });
     this.toolManager.registerTool({
       id: "get_diagnostics",
-      description: "Get all errors in the project",
+      description: "Get errors for a file/opened files in the project",
       inputSchema: {
         type: "object" as "object",
+        file: {
+          type: "string",
+          description: "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
+        },
+        required: []
       },
-      handler: async () => {
-        const requests = this.lspManager.getLsps().map((lsp) => lsp.getDiagnostics())
+      handler: async (args) => {
+        const requests = this.lspManager.getLsps().map((lsp) => lsp.getDiagnostics(args?.file))
         const diagnostics = (await Promise.all(requests)).flat()
         return JSON.stringify(diagnostics, null, 2)
       }
