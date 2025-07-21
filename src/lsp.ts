@@ -379,7 +379,7 @@ export class LspClientImpl implements LspClient {
     await this.started
     const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
     if (this.files && uri in this.files) {
-      if (this.files[uri].content !== contents) {
+      if (this.files[uri].content.trimEnd() !== contents.trimEnd()) {
         if (this.strictDiagnostics) {
           await this.files[uri].resolvedDiagnostics
         }
