@@ -27,6 +27,10 @@ const ConfigSchema = z.object({
   workspace: z.optional(z.string(), {
     description: "Path to the workspace to use for the LSP. Defaults to /"
   }),
+  instructions: z.optional(z.string(), {
+    description: "Instructions on how to use lspMcp",
+  }),
+  perToolInstructions: z.optional(z.map(z.string(), z.string()), { description: "Optional description overrides for each tool" })
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

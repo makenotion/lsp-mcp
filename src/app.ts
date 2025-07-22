@@ -24,7 +24,7 @@ export class App {
   private readonly workspace: string;
 
   constructor(
-    config: Config,
+    private readonly config: Config,
     protected readonly logger: Logger,
   ) {
     // keeps track of all the tools we're sending to the MCP
@@ -33,7 +33,7 @@ export class App {
     // keeps track of all the LSP Clients we're using
     this.lspManager = new LspManager(this.buildLsps(config.lsps, logger));
     // the MCP server
-    this.mcp = createMcp();
+    this.mcp = createMcp(config.instructions);
     // The LSP methods we support (textDocument/foo, etc)
     this.availableMethodIds = getLspMethods(config.methods);
 
@@ -187,10 +187,11 @@ export class App {
       if (lspProperty && inputSchema.properties) {
         inputSchema.properties[lspProperty.name] = lspProperty;
       }
+      const toolId = method.id.replace("/", "_")
 
       this.toolManager.registerTool({
-        id: method.id.replace("/", "_"),
-        description: method.description,
+        id: toolId,
+        description: this.config.perToolInstructions?.get(toolId) || method.description,
         inputSchema: inputSchema,
         handler: async (args, { sendNotification, _meta }) => {
           let lsp: LspClient | undefined;

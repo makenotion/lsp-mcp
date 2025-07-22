@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
 // Create an MCP server
-export function createMcp(): McpServer {
+export function createMcp(instructions?: string): McpServer {
   return new McpServer(
     {
       name: "LSP",
@@ -13,6 +13,7 @@ export function createMcp(): McpServer {
       capabilities: {
         tools: {},
       },
+      instructions
     },
   );
 }
