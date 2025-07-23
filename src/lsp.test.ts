@@ -427,6 +427,10 @@ describe("LSP protocol tests", () => {
 			)
 			await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
 			expect(await client.getDiagnostics()).toEqual([diagnostic])
+			expect(await client.getDiagnostics(FILE_PATH)).toEqual([diagnostic])
+			expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual([
+				diagnostic,
+			])
 			// The file needs to be changed to get new diagnostics
 			await writeFile(FILE_PATH, "testContent2")
 			await new Promise<void>(resolve =>

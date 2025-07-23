@@ -12,6 +12,7 @@ import { FileWatcher } from "./FileWatcher";
 import { setTimeout } from "timers/promises";
 import { readFileSync } from "fs";
 import { pathToFileUri } from "./lsp-methods";
+import { resolve } from "path";
 
 export interface LspClient {
   id: string;
@@ -405,6 +406,9 @@ export class LspClientImpl implements LspClient {
     await Promise.all(this.pendingProgress.values())
   }
   public async getDiagnostics(file?: string) {
+    if (file !== undefined) {
+      file = resolve(file)
+    }
     // If we're given a specific file, the agent may have called it without modifying it or opening it. This means we need to open it manually.
     if (file !== undefined) {
       await this.openFileContents(pathToFileUri(file), await readFile(file, "utf-8"))
