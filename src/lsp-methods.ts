@@ -30,7 +30,7 @@ export function pathToFileUri(path: string): string {
 }
 
 // convert file:///path/to/file to /path/to/file
-function fileUriToPath(uri: string): string {
+export function fileUriToPath(uri: string): string {
   if (uri.startsWith("file://")) {
     return path.resolve(uri.slice(7));
   }
@@ -40,13 +40,12 @@ function fileUriToPath(uri: string): string {
 
 // Let's the LSP know about a file contents
 export async function openFileContents(lsp: LspClient, uri: string, contents: string): Promise<void> {
-  await lsp.openFileContents(uri, contents);
+  await lsp.openFileContents(uri);
 }
 
 // Lets the LSP know about a file
-export async function openFile(lsp: LspClient, file: string, uri: string): Promise<void> {
-  const contents = await fs.readFile(file, "utf8");
-  await openFileContents(lsp, uri, contents);
+export async function openFile(lsp: LspClient, uri: string): Promise<void> {
+  await lsp.openFileContents(uri);
 }
 
 export async function lspMethodHandler(lsp: LspClient, methodId: string, args: Record<string, any>): Promise<string> {
@@ -58,7 +57,7 @@ export async function lspMethodHandler(lsp: LspClient, methodId: string, args: R
     const file = fileUriToPath(lspArgs.textDocument.uri);
     const uri = pathToFileUri(file);
     // TODO: decide how to close the file. Timeout I think is the best option?
-    await openFile(lsp, file, uri);
+    await openFile(lsp, uri);
     lspArgs = { ...lspArgs, textDocument: { ...lspArgs.textDocument, uri } };
   }
 
@@ -75,7 +74,7 @@ async function getMetaModel() {
 
 async function getDereferencedJsonSchema() {
   const parser = new $RefParser()
-  const schema = await parser.parse(path.join(__dirname,"./resources/generated.protocol.schema.json"))
+  const schema = await parser.parse(path.join(__dirname, "./resources/generated.protocol.schema.json"))
 
   const dereferenced = await parser.dereference(schema, {
     mutateInputSchema: false,
@@ -131,7 +130,7 @@ export async function getLspMethods(
       }
     }
     const metaModelTool = metaModelLookup.get(id);
-    if (metaModelTool?.messageDirection != "clientToServer"){
+    if (metaModelTool?.messageDirection != "clientToServer") {
       return undefined
     }
     return {

@@ -35,15 +35,9 @@ export class FileWatcher {
 		private readonly extensions: string[],
 		private readonly root: string,
 		private readonly logger: Logger,
-		private readonly onFileChanged: (
-			uri: string,
-			content: string,
-		) => Promise<void>,
+		private readonly onFileChanged: (uri: string) => Promise<void>,
 		private readonly onFileRemoved: (uri: string) => Promise<void>,
-		private readonly onFileCreated: (
-			uri: string,
-			content: string,
-		) => Promise<void>,
+		private readonly onFileCreated: (uri: string) => Promise<void>,
 	) {
 		this.events = []
 	}
@@ -70,10 +64,10 @@ export class FileWatcher {
 						const uri = pathToFileUri(path)
 						switch (type) {
 							case "update":
-								await this.onFileChanged(uri, await readFile(path, "utf-8"))
+								await this.onFileChanged(uri)
 								break
 							case "create":
-								await this.onFileCreated(uri, await readFile(path, "utf-8"))
+								await this.onFileCreated(uri)
 								break
 							case "delete":
 								await this.onFileRemoved(uri)

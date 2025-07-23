@@ -11,7 +11,7 @@ import { readFile } from "fs/promises";
 import { FileWatcher } from "./FileWatcher";
 import { setTimeout } from "timers/promises";
 import { readFileSync } from "fs";
-import { pathToFileUri } from "./lsp-methods";
+import { fileUriToPath, pathToFileUri } from "./lsp-methods";
 import { resolve } from "path";
 
 export interface LspClient {
@@ -25,7 +25,7 @@ export interface LspClient {
   dispose: () => Promise<void>;
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
-  openFileContents(uri: string, contents: string): Promise<void>;
+  openFileContents(uri: string, contents?: string): Promise<void>;
   registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
   getDiagnostics(file?: string): Promise<protocol.Diagnostic[]>;
 }
@@ -63,7 +63,7 @@ export class LspClientImpl implements LspClient {
     this.capabilities = undefined;
     this.files = {};
     this.pendingProgress = new Map();
-    this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri, contents) => this.openFileContents(uri, contents), (uri) => this.sendDidClose(uri), (uri, contents) => this.openFileContents(uri, contents));
+    this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri) => this.openFileContents(uri), (uri) => this.sendDidClose(uri), (uri) => this.openFileContents(uri));
   }
   async spawnChildProcess(): Promise<{
     connection: rpc.MessageConnection;
@@ -379,9 +379,10 @@ export class LspClientImpl implements LspClient {
 
   }
   // Lets the LSP know about a file contents
-  public async openFileContents(uri: string, contents: string): Promise<void> {
+  public async openFileContents(uri: string, contents?: string): Promise<void> {
     await this.started
     const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
+    contents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
     if (this.files && uri in this.files) {
       if (this.files[uri].content.trimEnd() !== contents.trimEnd()) {
         if (this.strictDiagnostics) {
@@ -400,9 +401,7 @@ export class LspClientImpl implements LspClient {
   }
   async checkFiles() {
     await Promise.all(Object.keys(this.files).map(async (uri) => {
-      const path = uri.split("file://")[1];
-      const contents = await readFile(path, "utf-8");
-      await this.openFileContents(uri, contents)
+      await this.openFileContents(uri)
     }))
   }
   async waitForProgress() {
@@ -414,7 +413,7 @@ export class LspClientImpl implements LspClient {
     }
     // If we're given a specific file, the agent may have called it without modifying it or opening it. This means we need to open it manually.
     if (file !== undefined) {
-      await this.openFileContents(pathToFileUri(file), await readFile(file, "utf-8"))
+      await this.openFileContents(pathToFileUri(file))
     }
     // Read all the files that have been opened and send change requests as appropriate.
     await this.checkFiles();
