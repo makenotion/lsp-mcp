@@ -10,7 +10,7 @@ import { convertLspToMcp } from "./progress";
 import { readFile } from "fs/promises";
 import { FileWatcher } from "./FileWatcher";
 import { setTimeout } from "timers/promises";
-import { readFileSync } from "fs";
+import { Mutex } from "async-mutex";
 import { fileUriToPath, pathToFileUri } from "./lsp-methods";
 import { resolve } from "path";
 
@@ -47,6 +47,7 @@ export class LspClientImpl implements LspClient {
   };
   private fileWatcher: FileWatcher;
   private started: Promise<void> | undefined = undefined
+  private readonly locks: Map<string, Mutex>
   public constructor(
     public readonly id: string,
     public readonly languages: string[],
@@ -63,6 +64,7 @@ export class LspClientImpl implements LspClient {
     this.capabilities = undefined;
     this.files = {};
     this.pendingProgress = new Map();
+    this.locks = new Map()
     this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri) => this.openFileContents(uri), (uri) => this.sendDidClose(uri), (uri) => this.openFileContents(uri));
   }
   async spawnChildProcess(): Promise<{
@@ -378,25 +380,82 @@ export class LspClientImpl implements LspClient {
     }
 
   }
-  // Lets the LSP know about a file contents
+  updateFileEntry(uri: string, version: number, contents: string): string {
+    const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
+    this.files[uri] = { content: contents, version, resolvedDiagnostics, reportDiagnostics };
+    return contents
+
+  }
+  // Lets the LSP know about a file contents.
+  // @param contents - The contents of the file. If not specified, read from disk. Only set this parameter this if the file isn't written to the disk.
   public async openFileContents(uri: string, contents?: string): Promise<void> {
     await this.started
-    const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
-    contents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
-    if (this.files && uri in this.files) {
-      if (this.files[uri].content.trimEnd() !== contents.trimEnd()) {
+    // We have 2 kinds of potential issues:
+    // 1. 2 opens of the same file
+    // 2. 2 updates of the same file
+    //
+    // Case 1:
+    // To avoid using a mutex here, we must check if the file is in our list of files then immediately add it to the list of files if it isn't.
+    // This means we must read the file before we know if it's in the list of files
+    const initialContents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
+    const lock = this.locks.get(uri)
+    if (this.files && uri in this.files && lock !== undefined) {
+      // Case 2: We can lock the file to ensure only one update happens at a time.
+      await lock.acquire()
+      try {
+        // If many updates are happening quickly to the same file, we want to read the latest version of the file. Say 3 updates happen in quick succession:
+        // 1 to contents A
+        // 2 to contents B
+        // 3 to contents C
+        //
+        // We execute the first request and are now waiting on the language server. Since we call await, the other 2 requests, will read their files.
+        //
+        // 1 to contents A  (pending)
+        // 2 to contents B (blocked)
+        // 3 to contents C (blocked)
+        //
+        // When it finishes, we may execute 2 or 3 without knowing which one. By re-reading the file here, we ensure that one is run with the latest contents and the other is skipped.
+        //
+        //
+        // Since this lock is per-file, this shouldn't impact the performance of edits across multiple files.
+        // High-stress cases are:
+        // a. Repeated edits to 1 file.
+        // b. Edits to multiple files.
+        //
+        // In case a:
+        // If we have N edits, the first edit will open the document and get diagnostics.
+        // Since we aren't I/O bound with the filesystem, by the time we have a response, the filesystem will have the contents of the Nth request on disk.
+        // This means that the second request (regardless of which one it is) will wait for the diagnostics of the first file and then read the file belonging to the last edit.
+        // Then the 3rd request would wait for the diagnostics of the second request and then no-op since the file hasn't changed.
+        // All subsequent requests will return instantly since they don't need to wait for the diagnostics.
+        // Even if the second request doesn't match the Nth request, the 3rd request will.
+        // Basically we have a bounded amount of delay that can be introduced here since eventually the agent will request diagnostics and it will need to wait for the file to be updated.
+        //
+        // In case b:
+        // We don't lock the entire map, just each file
+        // This means all the requests will occur in parallel (though in practice, we'll get diagnostics for all of them around the same time).
+        // Individually, they'll follow the same characteristics of case a.
+        // They can still block the event loop so the priority should be to maximize async I/O and minimize blocking.
+        // This is currently a problem when doing a git pull.
         if (this.strictDiagnostics) {
           await this.files[uri].resolvedDiagnostics
         }
-        this.logger.info(`LSP: File contents changed at ${uri}`);
-        const version = this.files[uri].version + 1;
-        this.files[uri] = { content: contents, version, resolvedDiagnostics, reportDiagnostics };
-        await this.sendDidChange(uri, contents, version)
-        await this.sendDidSave(uri, contents)
+        contents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
+        if (this.files[uri].content.trimEnd() !== contents.trimEnd()) {
+          this.logger.info(`LSP: File contents changed at ${uri}`);
+          const version = this.files[uri].version + 1;
+          this.updateFileEntry(uri, version, contents)
+          await this.sendDidChange(uri, contents, version)
+          await this.sendDidSave(uri, contents)
+        }
+
+      } finally {
+        lock.release()
       }
     } else {
-      this.files[uri] = { content: contents, version: 1, resolvedDiagnostics, reportDiagnostics };
-      await this.sendDidOpen(uri, contents)
+      this.locks.set(uri, new Mutex())
+      const newContents = this.updateFileEntry(uri, 1, initialContents)
+      await this.sendDidOpen(uri, newContents)
     }
   }
   async checkFiles() {
