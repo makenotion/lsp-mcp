@@ -279,7 +279,7 @@ describe.each([
 		})
 		describe("Document Synchronization", () => {
 			test("Manual Contents", async () => {
-				const OLD_CONTENT = "old_content"
+				const OLD_CONTENT = "old_content\n"
 				const NEW_CONTENT = "new_content"
 				await client.openFileContents(URI, OLD_CONTENT)
 				expect(await opened).toEqual({
@@ -298,6 +298,10 @@ describe.each([
 					contentChanges: [
 						{
 							text: NEW_CONTENT,
+							range: {
+								start: { line: 0, character: 0 },
+								end: { line: 1, character: 0 },
+							},
 						},
 					],
 					textDocument: {
@@ -314,8 +318,8 @@ describe.each([
 			})
 
 			test("FS events", async () => {
-				const OLD_CONTENT = "old_content"
-				const NEW_CONTENT = "new_content"
+				const OLD_CONTENT = "old_content\\n"
+				const NEW_CONTENT = "new_content\n"
 				await writeFile(FILE_PATH, OLD_CONTENT)
 				expect(await opened).toEqual({
 					textDocument: {
@@ -329,10 +333,14 @@ describe.each([
 				if (strict_diagnostics) {
 					await sendDiagnostics(server_connection, URI, [])
 				}
-				expect(await changed).toEqual({
+				expect(changed).resolves.toEqual({
 					contentChanges: [
 						{
 							text: NEW_CONTENT,
+							range: {
+								start: { line: 0, character: 0 },
+								end: { line: 0, character: 13 },
+							},
 						},
 					],
 					textDocument: {
@@ -362,6 +370,10 @@ describe.each([
 						contentChanges: [
 							{
 								text: NEW_NEW_CONTENT,
+								range: {
+									start: { line: 0, character: 0 },
+									end: { line: 0, character: 11 },
+								},
 							},
 						],
 						textDocument: {
