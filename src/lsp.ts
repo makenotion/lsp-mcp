@@ -459,6 +459,7 @@ export class LspClientImpl implements LspClient {
         lock.release()
       }
     } else {
+      this.logger.info(`Sending didOpen at ${uri}`)
       this.locks.set(uri, new Mutex())
       const newContents = this.updateFileEntry(uri, 1, initialContents)
       await this.sendDidOpen(uri, newContents)
@@ -493,27 +494,30 @@ export class LspClientImpl implements LspClient {
       this.files[uri].resolvedDiagnostics
     ))).flat()
   }
+  queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
+
+    for (const file in this.files) {
+      const old = this.files[file].resolvedDiagnostics
+      this.files[file].resolvedDiagnostics = Promise.race([old, setTimeout(delay).then(() => {
+        this.files[file].reportDiagnostics(diagnostics)
+        return diagnostics
+      })])
+    }
+  }
   handleDiagnostics(notification: protocol.PublishDiagnosticsParams): void {
     if (notification.uri in this.files) {
+      this.logger.log(`LSP: Recieved Diagnostics for file ${notification.uri}`);
       if (notification.version && notification.version !== this.files[notification.uri].version) {
         this.logger.warn("Rejecting outdated diagnostics for " + notification.uri)
         return
       }
       this.files[notification.uri].reportDiagnostics(notification.diagnostics)
+      this.queueAllDiagnostics([], 10000) // Wait  10 seconds. Sometimes vtsls will only send diagnostics for files with errors when diagnostics are requested for multiple files
     } else {
       this.logger.info("LSP: Recieved diagnostics for file wasn't opened " + notification.uri)
-      for (const file in this.files) {
-        // There is a condition where we may open files A and B, but the LSP may report diagnostics for B and C.
-        // To handle this, if we get an unknown file, we will wait for diagnostics to be reported on it. But if they aren't within 3000ms, we can use the file C diagnostics as a default.
-        const old = this.files[file].resolvedDiagnostics
-        this.files[file].resolvedDiagnostics = Promise.race([old, setTimeout(3000).then(() => {
-          this.files[file].reportDiagnostics(notification.diagnostics)
-          return notification.diagnostics
-        })])
-      }
-    }
-    if (notification.diagnostics.length > 0) {
-      this.logger.log(`LSP: Recieved Diagnostics ${JSON.stringify(notification, null, 2)}`);
+      // There is a condition where we may open files A and B, but the LSP may report diagnostics for B and C.
+      // To handle this, if we get an unknown file, we will wait for diagnostics to be reported on it. But if they aren't within 3000ms, we can use the file C diagnostics as a default.
+      this.queueAllDiagnostics(notification.diagnostics, 3000)
     }
   }
   async dispose() {
