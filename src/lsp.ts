@@ -467,6 +467,7 @@ export class LspClientImpl implements LspClient {
     await Promise.all(this.pendingProgress.values())
   }
   public async getDiagnostics(file?: string) {
+    await this.ensureStarted()
     if (file !== undefined) {
       file = resolve(file)
     }
