@@ -349,7 +349,8 @@ export class LspClientImpl implements LspClient {
     );
 
   }
-  async sendDidChange(uri: string, contents: string, version: number) {
+  async sendDidChange(uri: string, contents: string, oldContents: string, version: number) {
+    const split = oldContents.split("\n")
     await this.sendNotification(
       protocol.DidChangeTextDocumentNotification.method,
       {
@@ -360,6 +361,10 @@ export class LspClientImpl implements LspClient {
         contentChanges: [
           {
             text: contents,
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: split.length - 1, character: split[split.length - 1].length }
+            }
           },
         ],
       },
@@ -442,10 +447,11 @@ export class LspClientImpl implements LspClient {
         }
         contents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
         if (this.files[uri].content.trimEnd() !== contents.trimEnd()) {
+          const oldContents = this.files[uri].content
           this.logger.info(`LSP: File contents changed at ${uri}`);
           const version = this.files[uri].version + 1;
           this.updateFileEntry(uri, version, contents)
-          await this.sendDidChange(uri, contents, version)
+          await this.sendDidChange(uri, contents, oldContents, version)
           await this.sendDidSave(uri, contents)
         }
 
