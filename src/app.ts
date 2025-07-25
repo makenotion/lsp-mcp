@@ -252,7 +252,7 @@ export class App {
   public async openFile(path: string) {
     await Promise.all(this.lspManager.getLsps().map(async (lsp) => {
       const uri = pathToFileUri(path)
-      await openFile(lsp, path, uri)
+      await openFile(lsp, uri)
     }))
   }
   public async runTillFinished() {

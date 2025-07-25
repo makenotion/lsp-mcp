@@ -7,8 +7,8 @@ import { pathToFileUri } from "./lsp-methods"
 
 describe("File Watcher tests", () => {
 	let watcher: FileWatcher
-	const onAdd = vi.fn<(_: string, __: string) => Promise<void>>()
-	const onChange = vi.fn<(_: string, __: string) => Promise<void>>()
+	const onAdd = vi.fn<(_: string) => Promise<void>>()
+	const onChange = vi.fn<(_: string) => Promise<void>>()
 	const onRemove = vi.fn<(_: string) => Promise<void>>()
 	const testDir = path.resolve("__test__")
 	const target = join(testDir, "test.txt")
@@ -39,14 +39,14 @@ describe("File Watcher tests", () => {
 	test("Add File", async () => {
 		await writeFile(target, "test_Data")
 		await new Promise(r => setTimeout(r, 300))
-		expect(onAdd).toHaveBeenCalledWith(targetUri, "test_Data")
+		expect(onAdd).toHaveBeenCalledWith(targetUri)
 	})
 	test("Update File", async () => {
 		await writeFile(target, "test_Data")
 		await new Promise(r => setTimeout(r, 300))
 		await writeFile(target, "new_Data")
 		await new Promise(r => setTimeout(r, 300))
-		expect(onChange).toHaveBeenCalledWith(targetUri, "new_Data")
+		expect(onChange).toHaveBeenCalledWith(targetUri)
 	})
 	test("Remove File", async () => {
 		await writeFile(target, "test_Data")
