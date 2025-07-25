@@ -64,7 +64,9 @@ export class FileWatcher {
 						const uri = pathToFileUri(path)
 						switch (type) {
 							case "update":
-								await this.onFileChanged(uri)
+								if (!events.some(e => e.type === "create" && e.path === path)) {
+									await this.onFileChanged(uri)
+								}
 								break
 							case "create":
 								await this.onFileCreated(uri)
@@ -79,6 +81,8 @@ export class FileWatcher {
 			const { promise, resolve, reject: _ } = Promise.withResolvers<void>()
 			this.resolveNext = resolve
 			await promise
+			// In CI, the watcher may register a create as a create and change. This gives us a little bit of room to catch these cases.
+			await new Promise(resolve => setTimeout(resolve, 100))
 		}
 	}
 	async start() {

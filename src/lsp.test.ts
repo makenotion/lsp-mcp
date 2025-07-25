@@ -71,7 +71,13 @@ function checkProgress() {
 		'LSP Progress: {\"kind\":\"end\",\"message\":\"finished\"}',
 	)
 }
-describe("LSP protocol tests", () => {
+describe.each([
+	{
+		name: "(Strict Diagnostics)",
+		strict_diagnostics: true,
+	},
+	{ name: "", strict_diagnostics: false },
+])("LSP protocol tests $name", ({ strict_diagnostics }) => {
 	let client: LspClientImpl
 
 	let server_connection: rpc.MessageConnection
@@ -120,7 +126,7 @@ describe("LSP protocol tests", () => {
 			WORKSPACE,
 			true,
 			false,
-			false,
+			strict_diagnostics,
 			"",
 			[],
 			flattenJson(SETTINGS),
@@ -130,6 +136,7 @@ describe("LSP protocol tests", () => {
 			await rm(WORKSPACE, { recursive: true })
 		} catch {}
 		await mkdir(WORKSPACE)
+		await new Promise<void>(resolve => setTimeout(resolve, 300)) // Let the watcher load the folder
 	})
 	test("Initialize is sent", async () => {
 		const initialize = new Promise<void>(resolve => {
@@ -283,6 +290,9 @@ describe("LSP protocol tests", () => {
 						text: OLD_CONTENT,
 					},
 				})
+				if (strict_diagnostics) {
+					await sendDiagnostics(server_connection, URI, [])
+				}
 				await client.openFileContents(URI, NEW_CONTENT)
 				expect(await changed).toEqual({
 					contentChanges: [
@@ -316,6 +326,9 @@ describe("LSP protocol tests", () => {
 					},
 				})
 				await writeFile(FILE_PATH, NEW_CONTENT)
+				if (strict_diagnostics) {
+					await sendDiagnostics(server_connection, URI, [])
+				}
 				expect(await changed).toEqual({
 					contentChanges: [
 						{
@@ -334,6 +347,51 @@ describe("LSP protocol tests", () => {
 					text: NEW_CONTENT,
 				})
 			})
+			if (strict_diagnostics) {
+				const OLD_CONTENT = "old_content"
+				const NEW_CONTENT = "new_content"
+				const NEW_NEW_CONTENT = "new_new_content"
+				test("Repeated events", async () => {
+					await writeFile(FILE_PATH, OLD_CONTENT)
+					await opened
+					await writeFile(FILE_PATH, NEW_CONTENT)
+					await new Promise<void>(resolve => setTimeout(resolve, 1000))
+					await writeFile(FILE_PATH, NEW_NEW_CONTENT)
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
+					expect(await changed).toEqual({
+						contentChanges: [
+							{
+								text: NEW_NEW_CONTENT,
+							},
+						],
+						textDocument: {
+							uri: ABSOLUTE_URI,
+							version: 2,
+						},
+					})
+				})
+				test("Repeated events (harder)", async () => {
+					await writeFile(FILE_PATH, OLD_CONTENT, { flush: true }) // version 1
+					await opened
+					// Schedule 2 calls simultaneously, the first one will acquire the lock
+					const firstCall = client.openFileContents(ABSOLUTE_URI, NEW_CONTENT) //version 2
+					await new Promise<void>(resolve => setTimeout(resolve, 1000))
+					// The second call will be waiting on the old lock
+					const secondCall = client.openFileContents(
+						ABSOLUTE_URI,
+						NEW_NEW_CONTENT,
+					) //version 3
+					await new Promise<void>(resolve => setTimeout(resolve, 1000))
+					// This will release the lock
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
+					await changed
+					// Make sure the first call finished
+					await firstCall
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
+					// Make sure the second call finished
+					await secondCall
+				})
+			}
 		})
 		test("Shutdown", async () => {
 			let shutdown = false
