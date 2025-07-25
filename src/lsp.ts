@@ -269,9 +269,14 @@ export class LspClientImpl implements LspClient {
       throw new Error("Not started");
     }
   }
-
-  async sendRequest(method: string, args: any): Promise<any> {
+  private async ensureStarted() {
+    if (this.started === undefined) {
+      await this.start();
+    }
     await this.started
+  }
+  async sendRequest(method: string, args: any): Promise<any> {
+    await this.ensureStarted()
 
     this.assertStarted();
 
@@ -309,9 +314,7 @@ export class LspClientImpl implements LspClient {
     return token
   }
   async sendNotification(method: string, args: any): Promise<void> {
-    if (!this.isStarted()) {
-      await this.start();
-    }
+    await this.ensureStarted()
 
     this.assertStarted();
 
