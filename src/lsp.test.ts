@@ -243,122 +243,124 @@ describe("LSP protocol tests", () => {
 			server_connection.listen()
 			await client.start()
 		})
-		test("Update document", async () => {
-			const OLD_CONTENT = "old_content"
-			const NEW_CONTENT = "new_content"
-			const changed = new Promise<void>(resolve => {
-				server_connection.onNotification(
-					protocol.DidChangeTextDocumentNotification.type,
-					async params => {
-						expect(params).toEqual({
-							contentChanges: [
-								{
-									text: NEW_CONTENT,
+		describe("Document Synchronization", () => {
+			test("Manual Contents", async () => {
+				const OLD_CONTENT = "old_content"
+				const NEW_CONTENT = "new_content"
+				const changed = new Promise<void>(resolve => {
+					server_connection.onNotification(
+						protocol.DidChangeTextDocumentNotification.type,
+						async params => {
+							expect(params).toEqual({
+								contentChanges: [
+									{
+										text: NEW_CONTENT,
+									},
+								],
+								textDocument: {
+									uri: URI,
+									version: 2,
 								},
-							],
-							textDocument: {
-								uri: URI,
-								version: 2,
-							},
-						})
-						resolve()
-					},
-				)
+							})
+							resolve()
+						},
+					)
+				})
+				const saved = new Promise<void>(resolve => {
+					server_connection.onNotification(
+						protocol.DidSaveTextDocumentNotification.type,
+						async (params: protocol.DidSaveTextDocumentParams) => {
+							expect(params).toEqual({
+								textDocument: {
+									uri: URI,
+								},
+								text: NEW_CONTENT,
+							})
+							resolve()
+						},
+					)
+				})
+				const opened = new Promise<void>(resolve => {
+					server_connection.onNotification(
+						protocol.DidOpenTextDocumentNotification.type,
+						async (params: protocol.DidOpenTextDocumentParams) => {
+							expect(params).toEqual({
+								textDocument: {
+									uri: URI,
+									languageId: "typescript",
+									version: 1,
+									text: OLD_CONTENT,
+								},
+							})
+							resolve()
+						},
+					)
+				})
+				await client.openFileContents(URI, OLD_CONTENT)
+				await opened
+				await client.openFileContents(URI, NEW_CONTENT)
+				await changed
+				await saved
 			})
-			const saved = new Promise<void>(resolve => {
-				server_connection.onNotification(
-					protocol.DidSaveTextDocumentNotification.type,
-					async (params: protocol.DidSaveTextDocumentParams) => {
-						expect(params).toEqual({
-							textDocument: {
-								uri: URI,
-							},
-							text: NEW_CONTENT,
-						})
-						resolve()
-					},
-				)
-			})
-			const opened = new Promise<void>(resolve => {
-				server_connection.onNotification(
-					protocol.DidOpenTextDocumentNotification.type,
-					async (params: protocol.DidOpenTextDocumentParams) => {
-						expect(params).toEqual({
-							textDocument: {
-								uri: URI,
-								languageId: "typescript",
-								version: 1,
-								text: OLD_CONTENT,
-							},
-						})
-						resolve()
-					},
-				)
-			})
-			await client.openFileContents(URI, OLD_CONTENT)
-			await opened
-			await client.openFileContents(URI, NEW_CONTENT)
-			await changed
-			await saved
-		})
 
-		test("Update document (FS events)", async () => {
-			const OLD_CONTENT = "old_content"
-			const NEW_CONTENT = "new_content"
-			const changed = new Promise<void>(resolve => {
-				server_connection.onNotification(
-					protocol.DidChangeTextDocumentNotification.type,
-					async (params: protocol.DidChangeTextDocumentParams) => {
-						expect(params).toEqual({
-							contentChanges: [
-								{
-									text: NEW_CONTENT,
+			test("FS events", async () => {
+				const OLD_CONTENT = "old_content"
+				const NEW_CONTENT = "new_content"
+				const changed = new Promise<void>(resolve => {
+					server_connection.onNotification(
+						protocol.DidChangeTextDocumentNotification.type,
+						async (params: protocol.DidChangeTextDocumentParams) => {
+							expect(params).toEqual({
+								contentChanges: [
+									{
+										text: NEW_CONTENT,
+									},
+								],
+								textDocument: {
+									uri: ABSOLUTE_URI,
+									version: 2,
 								},
-							],
-							textDocument: {
-								uri: ABSOLUTE_URI,
-								version: 2,
-							},
-						})
-						resolve()
-					},
-				)
+							})
+							resolve()
+						},
+					)
+				})
+				const saved = new Promise<void>(resolve => {
+					server_connection.onNotification(
+						protocol.DidSaveTextDocumentNotification.type,
+						async (params: protocol.DidSaveTextDocumentParams) => {
+							expect(params).toEqual({
+								textDocument: {
+									uri: ABSOLUTE_URI,
+								},
+								text: NEW_CONTENT,
+							})
+							resolve()
+						},
+					)
+				})
+				const opened = new Promise<void>(resolve => {
+					server_connection.onNotification(
+						protocol.DidOpenTextDocumentNotification.type,
+						async (params: protocol.DidOpenTextDocumentParams) => {
+							expect(params).toEqual({
+								textDocument: {
+									uri: ABSOLUTE_URI,
+									languageId: "typescript",
+									version: 1,
+									text: OLD_CONTENT,
+								},
+							})
+							resolve()
+						},
+					)
+				})
+				await writeFile(FILE_PATH, OLD_CONTENT)
+				await opened
+				await writeFile(FILE_PATH, NEW_CONTENT)
+				await changed
+				await saved
 			})
-			const saved = new Promise<void>(resolve => {
-				server_connection.onNotification(
-					protocol.DidSaveTextDocumentNotification.type,
-					async (params: protocol.DidSaveTextDocumentParams) => {
-						expect(params).toEqual({
-							textDocument: {
-								uri: ABSOLUTE_URI,
-							},
-							text: NEW_CONTENT,
-						})
-						resolve()
-					},
-				)
-			})
-			const opened = new Promise<void>(resolve => {
-				server_connection.onNotification(
-					protocol.DidOpenTextDocumentNotification.type,
-					async (params: protocol.DidOpenTextDocumentParams) => {
-						expect(params).toEqual({
-							textDocument: {
-								uri: ABSOLUTE_URI,
-								languageId: "typescript",
-								version: 1,
-								text: OLD_CONTENT,
-							},
-						})
-						resolve()
-					},
-				)
-			})
-			await writeFile(FILE_PATH, OLD_CONTENT)
-			await opened
-			await writeFile(FILE_PATH, NEW_CONTENT)
-			await changed
-			await saved
 		})
 		test("Shutdown", async () => {
 			let shutdown = false
@@ -387,61 +389,64 @@ describe("LSP protocol tests", () => {
 			})
 			checkProgress()
 		})
-		test("Diagnostics (Single File)", async () => {
-			vi.spyOn(errorLogger, "log")
-			const diagnostic: protocol.Diagnostic = {
-				range: {
-					start: { line: 1, character: 1 },
-					end: { line: 1, character: 1 },
-				},
-				message: "error",
-			}
-			// The file needs to be opened to have diagnostics
-			await writeFile(FILE_PATH, "testContent")
-			let getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
-			await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
-			expect(await getter).toEqual([diagnostic])
-			// The file needs to be changed to get new diagnostics
-			await writeFile(FILE_PATH, "testContent2")
-			getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
-			await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-			expect(await getter).toEqual([])
-		}, 10000)
-		test("Diagnostics", async () => {
-			vi.spyOn(errorLogger, "log")
-			expect(await client.getDiagnostics()).toEqual([])
-			const diagnostic: protocol.Diagnostic = {
-				range: {
-					start: { line: 1, character: 1 },
-					end: { line: 1, character: 1 },
-				},
-				message: "error",
-			}
-			// The file needs to be opened to have diagnostics
-			await writeFile(FILE_PATH, "testContent")
-			await new Promise<void>(resolve =>
-				server_connection.onNotification(
-					protocol.DidOpenTextDocumentNotification.type,
-					(_: protocol.DidOpenTextDocumentParams) => resolve(),
-				),
-			)
-			await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
-			expect(await client.getDiagnostics()).toEqual([diagnostic])
-			expect(await client.getDiagnostics(FILE_PATH)).toEqual([diagnostic])
-			expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual([
-				diagnostic,
-			])
-			// The file needs to be changed to get new diagnostics
-			await writeFile(FILE_PATH, "testContent2")
-			await new Promise<void>(resolve =>
-				server_connection.onNotification(
-					protocol.DidChangeTextDocumentNotification.type,
-					(_: protocol.DidChangeTextDocumentParams) => resolve(),
-				),
-			)
-			await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-			expect(await client.getDiagnostics()).toEqual([])
-		}, 10000)
+		describe("Diagnostics", () => {
+			beforeEach(() => {
+				vi.spyOn(errorLogger, "log")
+			})
+			test("Diagnostics (Single File)", async () => {
+				const diagnostic: protocol.Diagnostic = {
+					range: {
+						start: { line: 1, character: 1 },
+						end: { line: 1, character: 1 },
+					},
+					message: "error",
+				}
+				// The file needs to be opened to have diagnostics
+				await writeFile(FILE_PATH, "testContent")
+				let getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
+				await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
+				expect(await getter).toEqual([diagnostic])
+				// The file needs to be changed to get new diagnostics
+				await writeFile(FILE_PATH, "testContent2")
+				getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
+				await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
+				expect(await getter).toEqual([])
+			}, 10000)
+			test("Diagnostics", async () => {
+				expect(await client.getDiagnostics()).toEqual([])
+				const diagnostic: protocol.Diagnostic = {
+					range: {
+						start: { line: 1, character: 1 },
+						end: { line: 1, character: 1 },
+					},
+					message: "error",
+				}
+				// The file needs to be opened to have diagnostics
+				await writeFile(FILE_PATH, "testContent")
+				await new Promise<void>(resolve =>
+					server_connection.onNotification(
+						protocol.DidOpenTextDocumentNotification.type,
+						(_: protocol.DidOpenTextDocumentParams) => resolve(),
+					),
+				)
+				await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
+				expect(await client.getDiagnostics()).toEqual([diagnostic])
+				expect(await client.getDiagnostics(FILE_PATH)).toEqual([diagnostic])
+				expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual([
+					diagnostic,
+				])
+				// The file needs to be changed to get new diagnostics
+				await writeFile(FILE_PATH, "testContent2")
+				await new Promise<void>(resolve =>
+					server_connection.onNotification(
+						protocol.DidChangeTextDocumentNotification.type,
+						(_: protocol.DidChangeTextDocumentParams) => resolve(),
+					),
+				)
+				await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
+				expect(await client.getDiagnostics()).toEqual([])
+			}, 10000)
+		})
 		test("Logging", async () => {
 			vi.spyOn(errorLogger, "log")
 			server_connection.sendNotification(protocol.LogMessageNotification.type, {
