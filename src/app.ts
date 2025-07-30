@@ -114,9 +114,17 @@ export class App {
       },
       handler: async (args) => {
         // Wait for 5 minutes
-        const requests = this.lspManager.getLsps().map((lsp) => Promise.race([lsp.getDiagnostics(args?.file), new Promise<Diagnostic[]>(resolve =>
-
-          setTimeout(() => { this.logger.error("Getting diagnostics timed out, returning empty result"); resolve([]) }, 300000))]))
+        const requests = this.lspManager.getLsps().map((lsp) => 
+          Promise.race([
+            lsp.getDiagnostics(args?.file), 
+            new Promise<Diagnostic[]>((resolve) => {
+              setTimeout(() => { 
+                this.logger.error("Getting diagnostics timed out, returning empty result"); 
+                resolve([]) 
+              }, 300000)
+            })
+          ])
+        )
         const diagnostics = (await Promise.all(requests)).flat()
         return JSON.stringify(diagnostics, null, 2)
       }
