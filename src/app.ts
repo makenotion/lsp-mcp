@@ -16,6 +16,7 @@ import { LspManager } from "./lsp-manager";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { promises as stream } from "node:stream"
+import type { Diagnostic } from "vscode-languageserver-protocol";
 export class App {
   private readonly toolManager: ToolManager;
   private readonly lspManager: LspManager;
@@ -112,7 +113,18 @@ export class App {
         required: []
       },
       handler: async (args) => {
-        const requests = this.lspManager.getLsps().map((lsp) => lsp.getDiagnostics(args?.file))
+        // Wait for 5 minutes
+        const requests = this.lspManager.getLsps().map((lsp) => 
+          Promise.race([
+            lsp.getDiagnostics(args?.file), 
+            new Promise<Diagnostic[]>((resolve) => {
+              setTimeout(() => { 
+                this.logger.error("Getting diagnostics timed out, returning empty result"); 
+                resolve([]) 
+              }, 300000)
+            })
+          ])
+        )
         const diagnostics = (await Promise.all(requests)).flat()
         return JSON.stringify(diagnostics, null, 2)
       }
@@ -240,13 +252,13 @@ export class App {
 
   public async start(transport: Transport = new StdioServerTransport()) {
     await Promise.all(this.lspManager.getLsps().map(async (lsp) => {
-      if(lsp.eagerStartup) {
+      if (lsp.eagerStartup) {
         await lsp.start()
       }
     }))
     await this.registerTools(),
-    await this.initializeMcp(),
-    await startMcp(this.mcp, transport);
+      await this.initializeMcp(),
+      await startMcp(this.mcp, transport);
   }
 
   public async openFile(path: string) {
@@ -296,11 +308,11 @@ export class App {
       type: type,
       properties: inputSchema.properties
         ? Object.fromEntries(
-            Object.entries(inputSchema.properties).map(([key, value]) => [
-              key,
-              this.removeInputSchemaInvariants(value),
-            ]),
-          )
+          Object.entries(inputSchema.properties).map(([key, value]) => [
+            key,
+            this.removeInputSchemaInvariants(value),
+          ]),
+        )
         : undefined,
     };
   }
