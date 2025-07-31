@@ -75,9 +75,15 @@ describe.each([
 	{
 		name: "(Strict Diagnostics)",
 		strict_diagnostics: true,
+		pullDiagnostics: false,
 	},
-	{ name: "", strict_diagnostics: false },
-])("LSP protocol tests $name", ({ strict_diagnostics }) => {
+	{ name: "", strict_diagnostics: false, pullDiagnostics: false },
+	{
+		name: "(Pull Diagnostics)",
+		strict_diagnostics: false,
+		pullDiagnostics: true,
+	},
+])("LSP protocol tests $name", ({ strict_diagnostics, pullDiagnostics }) => {
 	let client: LspClientImpl
 
 	let server_connection: rpc.MessageConnection
@@ -237,6 +243,19 @@ describe.each([
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
 				async (_: protocol.InitializeParams) => {
+					if (pullDiagnostics) {
+						return {
+							capabilities: {
+								textDocumentSync: {
+									save: true,
+								},
+								diagnosticProvider: {
+									workspaceDiagnostics: false,
+									interFileDependencies: false,
+								},
+							},
+						}
+					}
 					return {
 						capabilities: {
 							textDocumentSync: {
@@ -274,6 +293,7 @@ describe.each([
 				protocol.InitializedNotification.type,
 				async (_: protocol.InitializedParams) => {},
 			)
+
 			server_connection.listen()
 			await client.start()
 		})
@@ -333,7 +353,7 @@ describe.each([
 				if (strict_diagnostics) {
 					await sendDiagnostics(server_connection, URI, [])
 				}
-				expect(changed).resolves.toEqual({
+				await expect(changed).resolves.toEqual({
 					contentChanges: [
 						{
 							text: NEW_CONTENT,
@@ -437,49 +457,99 @@ describe.each([
 				vi.spyOn(errorLogger, "log")
 			})
 			test("Diagnostics (Single File)", async () => {
-				const diagnostic: protocol.Diagnostic = {
-					range: {
-						start: { line: 1, character: 1 },
-						end: { line: 1, character: 1 },
+				let diagnostics: protocol.Diagnostic[] = [
+					{
+						range: {
+							start: { line: 1, character: 1 },
+							end: { line: 1, character: 1 },
+						},
+						message: "error",
 					},
-					message: "error",
-				}
+				]
 				// The file needs to be opened to have diagnostics
 				await writeFile(FILE_PATH, "testContent")
+				const requestedDiagnostics = new Promise(resolve =>
+					server_connection.onRequest(
+						protocol.DocumentDiagnosticRequest.method,
+						async params => {
+							resolve(params)
+							return {
+								kind: "full",
+								items: diagnostics,
+							}
+						},
+					),
+				)
 				let getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
 				await opened
-				await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
-				expect(await getter).toEqual([diagnostic])
+				if (pullDiagnostics) {
+					const params = await requestedDiagnostics
+					expect(params).toMatchObject({
+						textDocument: { uri: ABSOLUTE_URI },
+					})
+				} else {
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
+				}
+				expect(await getter).toEqual(diagnostics)
 				// The file needs to be changed to get new diagnostics
+				diagnostics = []
 				await writeFile(FILE_PATH, "testContent2")
 				getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
 				await changed
-				await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-				expect(await getter).toEqual([])
+				if (!pullDiagnostics) {
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
+				}
+				expect(await getter).toEqual(diagnostics)
 			}, 10000)
 			test("Diagnostics", async () => {
-				expect(await client.getDiagnostics()).toEqual([])
-				const diagnostic: protocol.Diagnostic = {
-					range: {
-						start: { line: 1, character: 1 },
-						end: { line: 1, character: 1 },
+				let diagnostics: protocol.Diagnostic[] = []
+				const requestedDiagnostics = new Promise(resolve =>
+					server_connection.onRequest(
+						protocol.DocumentDiagnosticRequest.method,
+						async params => {
+							resolve(params)
+							return {
+								kind: "full",
+								items: diagnostics,
+							}
+						},
+					),
+				)
+				expect(await client.getDiagnostics()).toEqual(diagnostics)
+				diagnostics = [
+					{
+						range: {
+							start: { line: 1, character: 1 },
+							end: { line: 1, character: 1 },
+						},
+						message: "error",
 					},
-					message: "error",
-				}
+				]
 				// The file needs to be opened to have diagnostics
 				await writeFile(FILE_PATH, "testContent")
 				await opened
-				await sendDiagnostics(server_connection, ABSOLUTE_URI, [diagnostic])
-				expect(await client.getDiagnostics()).toEqual([diagnostic])
-				expect(await client.getDiagnostics(FILE_PATH)).toEqual([diagnostic])
-				expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual([
-					diagnostic,
-				])
+				if (!pullDiagnostics) {
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
+				}
+				expect(await client.getDiagnostics()).toEqual(diagnostics)
+				expect(await client.getDiagnostics(FILE_PATH)).toEqual(diagnostics)
+				expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual(
+					diagnostics,
+				)
+				if (pullDiagnostics) {
+					const params = await requestedDiagnostics
+					expect(params).toMatchObject({
+						textDocument: { uri: ABSOLUTE_URI },
+					})
+				}
+				diagnostics = []
 				// The file needs to be changed to get new diagnostics
 				await writeFile(FILE_PATH, "testContent2")
 				await changed
-				await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-				expect(await client.getDiagnostics()).toEqual([])
+				if (!pullDiagnostics) {
+					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
+				}
+				expect(await client.getDiagnostics()).toEqual(diagnostics)
 			}, 10000)
 		})
 		test("Logging", async () => {
