@@ -499,6 +499,7 @@ export class LspClientImpl implements LspClient {
     for (const file in this.files) {
       const old = this.files[file].resolvedDiagnostics
       this.files[file].resolvedDiagnostics = Promise.race([old, setTimeout(delay).then(() => {
+        this.logger.warn(`LSP: Diagnostics timed out for ${file}`)
         this.files[file].reportDiagnostics(diagnostics)
         return diagnostics
       })])
