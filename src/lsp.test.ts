@@ -285,7 +285,7 @@ describe.each([
 				expect(await opened).toEqual({
 					textDocument: {
 						uri: URI,
-						languageId: "typescript",
+						languageId: "typescriptreact",
 						version: 1,
 						text: OLD_CONTENT,
 					},
@@ -324,7 +324,7 @@ describe.each([
 				expect(await opened).toEqual({
 					textDocument: {
 						uri: ABSOLUTE_URI,
-						languageId: "typescript",
+						languageId: "typescriptreact",
 						version: 1,
 						text: OLD_CONTENT,
 					},
