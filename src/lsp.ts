@@ -341,7 +341,7 @@ export class LspClientImpl implements LspClient {
       {
         textDocument: {
           uri: uri,
-          languageId: "typescript",
+          languageId: "typescriptreact",
           version: 1,
           text: contents,
         },
