@@ -43,8 +43,11 @@ export class LspClientImpl implements LspClient {
       version: number;
       reportDiagnostics: ((_: protocol.Diagnostic[]) => void),
       resolvedDiagnostics: Promise<protocol.Diagnostic[]>,
+      previousDiagnosticId?: string
+      diagnosticId?: string
     };
   };
+  private previousDiagnostics: Map<string, protocol.Diagnostic[]>
   private fileWatcher: FileWatcher;
   private started: Promise<void> | undefined = undefined
   private readonly locks: Map<string, Mutex>
@@ -65,6 +68,7 @@ export class LspClientImpl implements LspClient {
     this.files = {};
     this.pendingProgress = new Map();
     this.locks = new Map()
+    this.previousDiagnostics = new Map();
     this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri) => this.openFileContents(uri), (uri) => this.sendDidClose(uri), (uri) => this.openFileContents(uri));
   }
   async spawnChildProcess(): Promise<{
@@ -227,6 +231,9 @@ export class LspClientImpl implements LspClient {
         documentSymbol: {
           symbolKind: { valueSet: Object.values(protocol.SymbolKind) },
           hierarchicalDocumentSymbolSupport: true,
+        },
+        diagnostic: {
+          relatedDocumentSupport: false
         }
       },
       window: {
@@ -385,9 +392,9 @@ export class LspClientImpl implements LspClient {
     }
 
   }
-  updateFileEntry(uri: string, version: number, contents: string): string {
+  updateFileEntry(uri: string, version: number, contents: string, previousDiagnosticId?: string): string {
     const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
-    this.files[uri] = { content: contents, version, resolvedDiagnostics, reportDiagnostics };
+    this.files[uri] = { content: contents, version, resolvedDiagnostics, reportDiagnostics, previousDiagnosticId, diagnosticId: undefined };
     return contents
 
   }
@@ -450,7 +457,7 @@ export class LspClientImpl implements LspClient {
           const oldContents = this.files[uri].content
           this.logger.info(`LSP: File contents changed at ${uri}`);
           const version = this.files[uri].version + 1;
-          this.updateFileEntry(uri, version, contents)
+          this.updateFileEntry(uri, version, contents, this.files[uri].diagnosticId)
           await this.sendDidChange(uri, contents, oldContents, version)
           await this.sendDidSave(uri, contents)
         }
@@ -473,14 +480,48 @@ export class LspClientImpl implements LspClient {
   async waitForProgress() {
     await Promise.all(this.pendingProgress.values())
   }
+  async getPullDiagnostics(uri: string): Promise<protocol.Diagnostic[]> {
+    await this.ensureStarted()
+    this.assertStarted()
+    const identifier = this.files[uri].diagnosticId ?? uuid()
+    this.files[uri].diagnosticId = identifier
+    const previousResultId = this.files[uri].previousDiagnosticId
+    const result = await this.connection.sendRequest(protocol.DocumentDiagnosticRequest.type, {
+      textDocument: {
+        uri
+      },
+      identifier,
+      previousResultId,
+    })
+    let items: protocol.Diagnostic[]
+    switch (result?.kind) {
+      case "full":
+        items = result.items
+        break
+      case "unchanged":
+        if (!this.previousDiagnostics.has(identifier)) {
+          this.logger.warn(`LSP: No diagnostics found for ${uri} with identifier ${identifier}`)
+        }
+        items = this.previousDiagnostics.get(identifier) ?? []
+        break
+    }
+    this.previousDiagnostics.set(identifier, items)
+    return items
+  }
+
   public async getDiagnostics(file?: string) {
     await this.ensureStarted()
+    this.assertStarted()
     if (file !== undefined) {
       file = resolve(file)
     }
     // If we're given a specific file, the agent may have called it without modifying it or opening it. This means we need to open it manually.
     if (file !== undefined) {
-      await this.openFileContents(pathToFileUri(file))
+      const uri = pathToFileUri(file)
+      await this.openFileContents(uri)
+      if (this.capabilities?.diagnosticProvider !== undefined) {
+        return await this.getPullDiagnostics(uri)
+      }
     }
     // Read all the files that have been opened and send change requests as appropriate.
     await this.checkFiles();
@@ -491,7 +532,7 @@ export class LspClientImpl implements LspClient {
       return await this.files[pathToFileUri(file)].resolvedDiagnostics
     }
     return (await Promise.all(Object.keys(this.files).map((uri) =>
-      this.files[uri].resolvedDiagnostics
+      this.capabilities?.diagnosticProvider !== undefined ? this.getPullDiagnostics(uri) : this.files[uri].resolvedDiagnostics
     ))).flat()
   }
   queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
