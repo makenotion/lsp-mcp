@@ -499,10 +499,15 @@ export class LspClientImpl implements LspClient {
         items = result.items
         break
       case "unchanged":
-        if (!this.previousDiagnostics.has(identifier)) {
-          this.logger.warn(`LSP: No diagnostics found for ${uri} with identifier ${identifier}`)
+        if(!previousResultId) {
+          this.logger.warn(`LSP: No previous result id found for ${uri}`)
+          items = []
+          break
         }
-        items = this.previousDiagnostics.get(identifier) ?? []
+        if (!this.previousDiagnostics.has(previousResultId)) {
+          this.logger.warn(`LSP: No diagnostics found for ${uri} with identifier ${previousResultId}`)
+        }
+        items = this.previousDiagnostics.get(previousResultId) ?? []
         break
     }
     this.previousDiagnostics.set(identifier, items)
