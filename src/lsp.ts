@@ -409,7 +409,14 @@ export class LspClientImpl implements LspClient {
     // Case 1:
     // To avoid using a mutex here, we must check if the file is in our list of files then immediately add it to the list of files if it isn't.
     // This means we must read the file before we know if it's in the list of files
-    const initialContents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
+    let initialContents = contents
+    if (initialContents === undefined) {
+      try {
+        initialContents = await readFile(fileUriToPath(uri), "utf-8")
+      } catch {
+        return await this.sendDidClose(uri)
+      }
+    }
     const lock = this.locks.get(uri)
     if (this.files && uri in this.files && lock !== undefined) {
       // Case 2: We can lock the file to ensure only one update happens at a time.
@@ -452,7 +459,13 @@ export class LspClientImpl implements LspClient {
         if (this.strictDiagnostics) {
           await this.files[uri].resolvedDiagnostics
         }
-        contents = contents ?? await readFile(fileUriToPath(uri), "utf-8")
+        if (contents === undefined) {
+          try {
+            contents = await readFile(fileUriToPath(uri), "utf-8")
+          } catch {
+            return await this.sendDidClose(uri)
+          }
+        }
         if (this.files[uri].content.trimEnd() !== contents.trimEnd()) {
           const oldContents = this.files[uri].content
           this.logger.info(`LSP: File contents changed at ${uri}`);
