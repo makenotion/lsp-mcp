@@ -110,23 +110,28 @@ export class App {
           type: "string",
           description: "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
         },
+        page: {
+          type: "integer",
+          name: "page",
+          description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
+        },
         required: []
       },
       handler: async (args) => {
         // Wait for 5 minutes
-        const requests = this.lspManager.getLsps().map((lsp) => 
+        const requests = this.lspManager.getLsps().map((lsp) =>
           Promise.race([
-            lsp.getDiagnostics(args?.file), 
+            lsp.getDiagnostics(args?.file),
             new Promise<Diagnostic[]>((resolve) => {
-              setTimeout(() => { 
-                this.logger.error("Getting diagnostics timed out, returning empty result"); 
-                resolve([]) 
+              setTimeout(() => {
+                this.logger.error("Getting diagnostics timed out, returning empty result");
+                resolve([])
               }, 300000)
             })
           ])
         )
         const diagnostics = (await Promise.all(requests)).flat()
-        return JSON.stringify(diagnostics, null, 2)
+        return paginateResponse(diagnostics, args?.page ?? 0, 100)
       }
     })
     this.toolManager.registerTool({
