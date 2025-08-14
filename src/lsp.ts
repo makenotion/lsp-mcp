@@ -551,7 +551,10 @@ export class LspClientImpl implements LspClient {
     ))).flat()
   }
   queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
-
+    if (this.capabilities?.diagnosticProvider !== undefined) {
+      // Since this is hack for push diagnostics, we don't need to set these timeouts for pull diagnostics
+      return
+    }
     for (const file in this.files) {
       const old = this.files[file].resolvedDiagnostics
       this.files[file].resolvedDiagnostics = Promise.race([old, setTimeout(delay).then(() => {
