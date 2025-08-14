@@ -12,7 +12,7 @@ import { FileWatcher } from "./FileWatcher";
 import { setTimeout } from "timers/promises";
 import { Mutex } from "async-mutex";
 import { fileUriToPath, pathToFileUri } from "./lsp-methods";
-import { resolve } from "path";
+import path, { resolve } from "path";
 
 export interface LspClient {
   id: string;
@@ -499,7 +499,7 @@ export class LspClientImpl implements LspClient {
         items = result.items
         break
       case "unchanged":
-        if(!previousResultId) {
+        if (!previousResultId) {
           this.logger.warn(`LSP: No previous result id found for ${uri}`)
           items = []
           break
@@ -513,6 +513,16 @@ export class LspClientImpl implements LspClient {
     this.previousDiagnostics.set(identifier, items)
     return items
   }
+  attachFileName(diagnostics: protocol.Diagnostic[], uri: string): protocol.Diagnostic[] {
+    const file = fileUriToPath(uri).replace(path.resolve(this.workspace) + "/", "")
+    return diagnostics.map((diagnostic) => {
+      return {
+        path: file,
+        ...diagnostic
+      }
+    })
+  }
+
 
   public async getDiagnostics(file?: string) {
     await this.ensureStarted()
@@ -525,7 +535,7 @@ export class LspClientImpl implements LspClient {
       const uri = pathToFileUri(file)
       await this.openFileContents(uri)
       if (this.capabilities?.diagnosticProvider !== undefined) {
-        return await this.getPullDiagnostics(uri)
+        return this.attachFileName(await this.getPullDiagnostics(uri), file)
       }
     }
     // Read all the files that have been opened and send change requests as appropriate.
@@ -534,10 +544,10 @@ export class LspClientImpl implements LspClient {
     // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
     await this.waitForProgress()
     if (file !== undefined) {
-      return await this.files[pathToFileUri(file)].resolvedDiagnostics
+      return this.attachFileName(await this.files[pathToFileUri(file)].resolvedDiagnostics, file)
     }
     return (await Promise.all(Object.keys(this.files).map((uri) =>
-      this.capabilities?.diagnosticProvider !== undefined ? this.getPullDiagnostics(uri) : this.files[uri].resolvedDiagnostics
+      (this.capabilities?.diagnosticProvider !== undefined ? this.getPullDiagnostics(uri) : this.files[uri].resolvedDiagnostics).then((diagnostics) => this.attachFileName(diagnostics, uri))
     ))).flat()
   }
   queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
