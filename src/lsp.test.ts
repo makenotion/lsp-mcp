@@ -466,6 +466,14 @@ describe.each([
 						message: "error",
 					},
 				]
+				const expectedDiagnostics: protocol.Diagnostic[] = diagnostics.map(
+					diagnostic => {
+						return {
+							path: FILE_PATH.replace(`${WORKSPACE}/`, ""),
+							...diagnostic,
+						}
+					},
+				)
 				// The file needs to be opened to have diagnostics
 				await writeFile(FILE_PATH, "testContent")
 				const requestedDiagnostics = new Promise(resolve =>
@@ -490,7 +498,7 @@ describe.each([
 				} else {
 					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
 				}
-				expect(await getter).toEqual(diagnostics)
+				expect(await getter).toEqual(expectedDiagnostics)
 				// The file needs to be changed to get new diagnostics
 				diagnostics = []
 				await writeFile(FILE_PATH, "testContent2")
@@ -525,16 +533,26 @@ describe.each([
 						message: "error",
 					},
 				]
+				const expectedDiagnostics: protocol.Diagnostic[] = diagnostics.map(
+					diagnostic => {
+						return {
+							path: FILE_PATH.replace(`${WORKSPACE}/`, ""),
+							...diagnostic,
+						}
+					},
+				)
 				// The file needs to be opened to have diagnostics
 				await writeFile(FILE_PATH, "testContent")
 				await opened
 				if (!pullDiagnostics) {
 					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
 				}
-				expect(await client.getDiagnostics()).toEqual(diagnostics)
-				expect(await client.getDiagnostics(FILE_PATH)).toEqual(diagnostics)
+				expect(await client.getDiagnostics()).toEqual(expectedDiagnostics)
+				expect(await client.getDiagnostics(FILE_PATH)).toEqual(
+					expectedDiagnostics,
+				)
 				expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual(
-					diagnostics,
+					expectedDiagnostics,
 				)
 				if (pullDiagnostics) {
 					const params = await requestedDiagnostics
