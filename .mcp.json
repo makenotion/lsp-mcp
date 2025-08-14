@@ -1,0 +1,12 @@
+  {
+    "mcpServers": {
+      "lsp": {
+        "command": "node",
+        "args": [
+          "./dist/index.js",
+          "--lsp",
+          "npx -y --silent -p 'typescript@5.7.3' -p 'typescript-language-server@4.3.3' typescript-language-server --stdio"
+        ]
+      }
+    }
+  }
