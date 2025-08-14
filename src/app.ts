@@ -113,7 +113,7 @@ export class App {
         page: {
           type: "integer",
           name: "page",
-          description: "When there are more results than can fit in a single response, this will return a token that can be used to get the next page of results. The first page is 0 and is the default.",
+          description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
         },
         required: []
       },
