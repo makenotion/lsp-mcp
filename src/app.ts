@@ -106,14 +106,16 @@ export class App {
       description: "Get errors for a file/opened files in the project",
       inputSchema: {
         type: "object" as "object",
-        file: {
-          type: "string",
-          description: "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
-        },
-        page: {
-          type: "integer",
-          name: "page",
-          description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
+        properties: {
+          file: {
+            type: "string",
+            description: "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
+          },
+          page: {
+            type: "integer",
+            name: "page",
+            description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
+          },
         },
         required: []
       },
