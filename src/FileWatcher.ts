@@ -88,6 +88,7 @@ export class FileWatcher {
 	async start() {
 		this.logger.info(`Reading gitignore from ${this.root}`)
 		const gitignore = await readGitIgnore(this.logger, this.root)
+		gitignore.push(".git/")
 		this.logger.info(
 			`Starting file watcher for ${JSON.stringify(this.root)} with extensions ${JSON.stringify(this.extensions)}`,
 		)
