@@ -30,7 +30,10 @@ const ConfigSchema = z.object({
   instructions: z.optional(z.string(), {
     description: "Instructions on how to use lspMcp",
   }),
-  perToolInstructions: z.optional(z.map(z.string(), z.string()), { description: "Optional description overrides for each tool" })
+  perToolInstructions: z.optional(z.map(z.string(), z.string()), { description: "Optional description overrides for each tool" }),
+  diagnosticsRequireFile: z.optional(z.boolean(), {
+    description: "When true, the `file` parameter becomes required for get_diagnostics.",
+  }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
