@@ -27,6 +27,8 @@ export interface LspClient {
   openFileContents(uri: string, contents?: string): Promise<void>;
   registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
   getDiagnostics(file: string): Promise<protocol.Diagnostic[]>;
+  supportsWorkspaceDiagnostics(): boolean;
+  getWorkspaceDiagnostics(): Promise<protocol.Diagnostic[]>;
 }
 
 export class LspClientImpl implements LspClient {
@@ -476,6 +478,24 @@ export class LspClientImpl implements LspClient {
       throw new Error(`LSP ${this.id} doesn't support pull diagnostics`)
     }
     return this.attachFileName(await this.getPullDiagnostics(uri), file)
+  }
+  public supportsWorkspaceDiagnostics(): boolean {
+    return this.capabilities?.diagnosticProvider?.workspaceDiagnostics === true
+  }
+
+  public async getWorkspaceDiagnostics(): Promise<protocol.Diagnostic[]> {
+    await this.ensureStarted()
+    this.assertStarted()
+    if (!this.supportsWorkspaceDiagnostics()) {
+      return []
+    }
+    const result = await this.connection.sendRequest(protocol.WorkspaceDiagnosticRequest.type, {
+      identifier: this.capabilities?.diagnosticProvider?.identifier,
+      previousResultIds: [],
+    })
+    return result.items.flatMap((item) =>
+      item.kind === "full" ? this.attachFileName(item.items, item.uri) : []
+    )
   }
   async dispose() {
     try {

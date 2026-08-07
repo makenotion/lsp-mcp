@@ -214,7 +214,7 @@ describe("LSP protocol tests", () => {
 								save: true,
 							},
 							diagnosticProvider: {
-								workspaceDiagnostics: false,
+								workspaceDiagnostics: true,
 								interFileDependencies: false,
 							},
 						},
@@ -432,6 +432,49 @@ describe("LSP protocol tests", () => {
 				await changed
 				expect(await updated).toEqual(diagnostics)
 			}, 10000)
+			test("Workspace Diagnostics", async () => {
+				const diagnostics: protocol.Diagnostic[] = [
+					{
+						range: {
+							start: { line: 1, character: 1 },
+							end: { line: 1, character: 1 },
+						},
+						message: "error",
+					},
+				]
+				server_connection.onRequest(
+					protocol.WorkspaceDiagnosticRequest.method,
+					async (_: protocol.WorkspaceDiagnosticParams) => {
+						return {
+							items: [
+								{
+									kind: "full",
+									uri: ABSOLUTE_URI,
+									version: 1,
+									items: diagnostics,
+								},
+							],
+						}
+					},
+				)
+				expect(client.supportsWorkspaceDiagnostics()).toBe(true)
+				expect(await client.getWorkspaceDiagnostics()).toEqual(
+					diagnostics.map(diagnostic => ({
+						path: FILE_PATH.replace(`${WORKSPACE}/`, ""),
+						...diagnostic,
+					})),
+				)
+			}, 10000)
+			test("Workspace Diagnostics (Unsupported)", async () => {
+				client.capabilities = {
+					diagnosticProvider: {
+						workspaceDiagnostics: false,
+						interFileDependencies: false,
+					},
+				}
+				expect(client.supportsWorkspaceDiagnostics()).toBe(false)
+				expect(await client.getWorkspaceDiagnostics()).toEqual([])
+			})
 		})
 		test("Logging", async () => {
 			vi.spyOn(errorLogger, "log")
