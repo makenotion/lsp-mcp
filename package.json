@@ -47,7 +47,6 @@
   "dependencies": {
     "@apidevtools/json-schema-ref-parser": "^11.9.1",
     "@modelcontextprotocol/sdk": "^1.13.1",
-    "@parcel/watcher": "^2.5.1",
     "async-mutex": "^0.5.0",
     "commander": "^13.1.0",
     "strip-json-comments": "^5.0.1",

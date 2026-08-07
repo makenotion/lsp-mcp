@@ -143,7 +143,6 @@ describe.each([
 			await rm(WORKSPACE, { recursive: true })
 		} catch {}
 		await mkdir(WORKSPACE)
-		await new Promise<void>(resolve => setTimeout(resolve, 300)) // Let the watcher load the folder
 	})
 	test("Initialize is sent", async () => {
 		const initialize = new Promise<void>(resolve => {
@@ -342,73 +341,13 @@ describe.each([
 				})
 			})
 
-			test("FS events", async () => {
-				const OLD_CONTENT = "old_content\\n"
-				const NEW_CONTENT = "new_content\n"
-				await writeFile(FILE_PATH, OLD_CONTENT)
-				expect(await opened).toEqual({
-					textDocument: {
-						uri: ABSOLUTE_URI,
-						languageId: "typescriptreact",
-						version: 1,
-						text: OLD_CONTENT,
-					},
-				})
-				await writeFile(FILE_PATH, NEW_CONTENT)
-				if (strict_diagnostics) {
-					await sendDiagnostics(server_connection, URI, [])
-				}
-				await expect(changed).resolves.toEqual({
-					contentChanges: [
-						{
-							text: NEW_CONTENT,
-							range: {
-								start: { line: 0, character: 0 },
-								end: { line: 0, character: 13 },
-							},
-						},
-					],
-					textDocument: {
-						uri: ABSOLUTE_URI,
-						version: 2,
-					},
-				})
-				expect(await saved).toEqual({
-					textDocument: {
-						uri: ABSOLUTE_URI,
-					},
-					text: NEW_CONTENT,
-				})
-			})
 			if (strict_diagnostics) {
 				const OLD_CONTENT = "old_content"
 				const NEW_CONTENT = "new_content"
 				const NEW_NEW_CONTENT = "new_new_content"
-				test("Repeated events", async () => {
-					await writeFile(FILE_PATH, OLD_CONTENT)
-					await opened
-					await writeFile(FILE_PATH, NEW_CONTENT)
-					await new Promise<void>(resolve => setTimeout(resolve, 1000))
-					await writeFile(FILE_PATH, NEW_NEW_CONTENT)
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-					expect(await changed).toEqual({
-						contentChanges: [
-							{
-								text: NEW_NEW_CONTENT,
-								range: {
-									start: { line: 0, character: 0 },
-									end: { line: 0, character: 11 },
-								},
-							},
-						],
-						textDocument: {
-							uri: ABSOLUTE_URI,
-							version: 2,
-						},
-					})
-				})
 				test("Repeated events (harder)", async () => {
 					await writeFile(FILE_PATH, OLD_CONTENT, { flush: true }) // version 1
+					void client.openFileContents(ABSOLUTE_URI)
 					await opened
 					// Schedule 2 calls simultaneously, the first one will acquire the lock
 					const firstCall = client.openFileContents(ABSOLUTE_URI, NEW_CONTENT) //version 2
@@ -544,15 +483,13 @@ describe.each([
 						}
 					},
 				)
-				// The file needs to be opened to have diagnostics
 				await writeFile(FILE_PATH, "testContent")
+				const initial = client.getDiagnostics(FILE_PATH)
 				await opened
 				if (!pullDiagnostics) {
 					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
 				}
-				expect(await client.getDiagnostics(FILE_PATH)).toEqual(
-					expectedDiagnostics,
-				)
+				expect(await initial).toEqual(expectedDiagnostics)
 				expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual(
 					expectedDiagnostics,
 				)
@@ -563,13 +500,13 @@ describe.each([
 					})
 				}
 				diagnostics = []
-				// The file needs to be changed to get new diagnostics
 				await writeFile(FILE_PATH, "testContent2")
+				const updated = client.getDiagnostics(FILE_PATH)
 				await changed
 				if (!pullDiagnostics) {
 					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
 				}
-				expect(await client.getDiagnostics(FILE_PATH)).toEqual(diagnostics)
+				expect(await updated).toEqual(diagnostics)
 			}, 10000)
 		})
 		test("Logging", async () => {
