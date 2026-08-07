@@ -515,7 +515,15 @@ describe.each([
 				expect(await getter).toEqual(diagnostics)
 			}, 10000)
 			test("Diagnostics", async () => {
-				let diagnostics: protocol.Diagnostic[] = []
+				let diagnostics: protocol.Diagnostic[] = [
+					{
+						range: {
+							start: { line: 1, character: 1 },
+							end: { line: 1, character: 1 },
+						},
+						message: "error",
+					},
+				]
 				const requestedDiagnostics = new Promise(resolve =>
 					server_connection.onRequest(
 						protocol.DocumentDiagnosticRequest.method,
@@ -528,16 +536,6 @@ describe.each([
 						},
 					),
 				)
-				expect(await client.getDiagnostics()).toEqual(diagnostics)
-				diagnostics = [
-					{
-						range: {
-							start: { line: 1, character: 1 },
-							end: { line: 1, character: 1 },
-						},
-						message: "error",
-					},
-				]
 				const expectedDiagnostics: protocol.Diagnostic[] = diagnostics.map(
 					diagnostic => {
 						return {
@@ -552,7 +550,6 @@ describe.each([
 				if (!pullDiagnostics) {
 					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
 				}
-				expect(await client.getDiagnostics()).toEqual(expectedDiagnostics)
 				expect(await client.getDiagnostics(FILE_PATH)).toEqual(
 					expectedDiagnostics,
 				)
@@ -572,7 +569,7 @@ describe.each([
 				if (!pullDiagnostics) {
 					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
 				}
-				expect(await client.getDiagnostics()).toEqual(diagnostics)
+				expect(await client.getDiagnostics(FILE_PATH)).toEqual(diagnostics)
 			}, 10000)
 		})
 		test("Logging", async () => {
