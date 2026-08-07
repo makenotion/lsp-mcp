@@ -140,6 +140,40 @@ export class App {
         return paginateResponse(diagnostics, args?.page ?? 0, 100)
       }
     })
+    // LSPs that haven't started yet don't report their capabilities, so give them the benefit of the doubt.
+    if (this.lspManager.getLsps().some((lsp) => !lsp.isStarted() || lsp.supportsWorkspaceDiagnostics())) {
+      this.toolManager.registerTool({
+        id: "check_workspace",
+        description: "Get errors for the entire workspace",
+        inputSchema: {
+          type: "object" as "object",
+          properties: {
+            page: {
+              type: "integer",
+              name: "page",
+              description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
+            },
+          },
+          required: []
+        },
+        handler: async (args) => {
+          // Wait for 5 minutes
+          const requests = this.lspManager.getLsps().map((lsp) =>
+            Promise.race([
+              lsp.getWorkspaceDiagnostics(),
+              new Promise<Diagnostic[]>((resolve) => {
+                setTimeout(() => {
+                  this.logger.error("Getting workspace diagnostics timed out, returning empty result");
+                  resolve([])
+                }, 300000)
+              })
+            ])
+          )
+          const diagnostics = (await Promise.all(requests)).flat()
+          return paginateResponse(diagnostics, args?.page ?? 0, 100)
+        }
+      })
+    }
     this.toolManager.registerTool({
       id: "file_contents_to_uri",
       description:
