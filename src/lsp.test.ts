@@ -17,6 +17,7 @@ import * as protocol from "vscode-languageserver-protocol"
 import { errorLogger } from "./logger"
 import { LspClientImpl } from "./lsp"
 import { flattenJson } from "./utils"
+import { PACKAGE_NAME, PACKAGE_VERSION } from "./version"
 
 async function sendProgress(
 	server_connection: rpc.MessageConnection,
@@ -152,6 +153,10 @@ describe.each([
 					const URI = `file://${WORKSPACE}`
 					expect(params).toMatchObject({
 						initializationOptions: EXPECTED_SETTINGS,
+						clientInfo: {
+							name: PACKAGE_NAME,
+							version: PACKAGE_VERSION,
+						},
 						capabilities: expect.any(Object),
 						processId: expect.any(Number),
 						rootUri: URI,

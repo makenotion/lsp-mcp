@@ -13,6 +13,7 @@ import { setTimeout } from "timers/promises";
 import { Mutex } from "async-mutex";
 import { fileUriToPath, pathToFileUri } from "./lsp-methods";
 import path, { resolve } from "path";
+import { buildClientInfo } from "./version";
 
 export interface LspClient {
   id: string;
@@ -63,6 +64,8 @@ export class LspClientImpl implements LspClient {
     private readonly args: string[],
     private readonly settings: object,
     private readonly logger: Logger, // TODO: better long term solution for logging
+    // Resolved lazily since the agent isn't known until the MCP handshake completes
+    private readonly getClientInfo: () => { name: string; version: string } = () => buildClientInfo(),
   ) {
     this.capabilities = undefined;
     this.files = {};
@@ -248,6 +251,7 @@ export class LspClientImpl implements LspClient {
     this.logger.log(`LSP workspace: ${uri}`);
     const response = await connection.sendRequest(InitializeRequest.type, {
       processId: process.pid,
+      clientInfo: this.getClientInfo(),
       rootPath: this.workspace, // Used for eslint
       rootUri: uri, // Used by most lsps
       capabilities: capabilities,

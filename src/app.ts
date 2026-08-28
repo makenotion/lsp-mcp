@@ -17,6 +17,7 @@ import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { promises as stream } from "node:stream"
 import type { Diagnostic } from "vscode-languageserver-protocol";
+import { buildClientInfo } from "./version";
 export class App {
   private readonly toolManager: ToolManager;
   private readonly lspManager: LspManager;
@@ -339,6 +340,7 @@ export class App {
           lspConfig.args,
           flattenJson(lspConfig.settings ?? {}),
           logger,
+          () => buildClientInfo(this.mcp.getClientVersion()),
         ),
     );
   }

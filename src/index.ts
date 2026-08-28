@@ -5,6 +5,7 @@ import { Command, OptionValues } from "commander";
 import { Config, loadConfig } from "./config";
 import { App } from "./app";
 import { Logger } from "vscode-languageserver-protocol";
+import { PACKAGE_VERSION } from "./version";
 
 async function buildConfig(options: OptionValues, logger: Logger): Promise<Config> {
   let config: Config | undefined;
@@ -57,7 +58,7 @@ async function main() {
   program
     .name("lsp-mcp")
     .description("A tool for providing LSP requests to MCP")
-    .version("0.1.0")
+    .version(PACKAGE_VERSION)
     .option(
       "-m, --methods [string...]",
       "LSP methods to enabled (Default: all)",
