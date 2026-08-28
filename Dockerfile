@@ -28,6 +28,8 @@ RUN apt install -y python3-pylsp
 
 COPY --from=builder /app/dist /app
 COPY --from=builder /app/node_modules /app/node_modules
+# dist is flattened into /app, so keep package.json next to it for version reporting
+COPY --from=builder /app/package.json /app/package.json
 
 # Cleanup
 RUN apt clean && rm -rf /var/lib/apt/lists/*
