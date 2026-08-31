@@ -102,15 +102,20 @@ export class App {
         return JSON.stringify(result, null, 2)
       },
     });
+    const fileRequired = this.config.diagnosticsRequireFile ?? false;
     this.toolManager.registerTool({
       id: "get_diagnostics",
-      description: "Get errors for a file/opened files in the project",
+      description: fileRequired
+        ? "Get type errors for a specific file in the project"
+        : "Get errors for a file/opened files in the project",
       inputSchema: {
         type: "object" as "object",
         properties: {
           file: {
             type: "string",
-            description: "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
+            description: fileRequired
+              ? "The file path to get diagnostics for (required)."
+              : "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
           },
           page: {
             type: "integer",
@@ -118,7 +123,7 @@ export class App {
             description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
           },
         },
-        required: []
+        required: fileRequired ? ["file"] : [],
       },
       handler: async (args) => {
         // Wait for 5 minutes
