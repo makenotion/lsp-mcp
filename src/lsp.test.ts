@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { mkdir, rm, writeFile } from "node:fs/promises"
-import { duplexPair } from "node:stream"
+import { type Duplex, duplexPair } from "node:stream"
 import {
 	afterEach,
 	beforeEach,
@@ -68,8 +68,10 @@ describe("LSP protocol tests", () => {
 		},
 	}
 	let mockSpawn: MockInstance<typeof LspClientImpl.prototype.spawnChildProcess>
+	let client_read_stream: Duplex
 	beforeEach(async () => {
 		const [pair_a_read, pair_a_write] = duplexPair()
+		client_read_stream = pair_a_read
 		const [pair_b_read, pair_b_write] = duplexPair()
 		const client_connection = rpc.createMessageConnection(
 			new StreamMessageReader(pair_a_read),
@@ -321,6 +323,51 @@ describe("LSP protocol tests", () => {
 			})
 			await client.dispose()
 			expect(shutdown).toBe(true)
+		})
+		test("Restarts the language server after its connection closes", async () => {
+			const [pair_c_read, pair_c_write] = duplexPair()
+			const [pair_d_read, pair_d_write] = duplexPair()
+			const restarted_client_connection = rpc.createMessageConnection(
+				new StreamMessageReader(pair_c_read),
+				new StreamMessageWriter(pair_d_write),
+			)
+			const restarted_server_connection = rpc.createMessageConnection(
+				new StreamMessageReader(pair_d_read),
+				new StreamMessageWriter(pair_c_write),
+			)
+			let initializeCount = 0
+			restarted_server_connection.onRequest(
+				protocol.InitializeRequest.type,
+				async () => {
+					initializeCount++
+					return { capabilities: {} }
+				},
+			)
+			restarted_server_connection.onNotification(
+				protocol.InitializedNotification.type,
+				async () => {},
+			)
+			restarted_server_connection.onRequest("custom/ping", async () => "pong")
+			restarted_server_connection.onRequest(
+				protocol.ShutdownRequest.type,
+				async () => {},
+			)
+			restarted_server_connection.listen()
+			mockSpawn.mockImplementationOnce(async () => ({
+				connection: restarted_client_connection,
+				childProcess: spawn("ls"),
+			}))
+
+			await client.openFileContents(URI, "contents")
+			expect(client.isStarted()).toBe(true)
+
+			client_read_stream.destroy()
+			await vi.waitFor(() => expect(client.isStarted()).toBe(false))
+
+			expect(await client.sendRequest("custom/ping", {})).toBe("pong")
+			expect(initializeCount).toBe(1)
+			expect(mockSpawn).toHaveBeenCalledTimes(2)
+			expect(client.isStarted()).toBe(true)
 		})
 		test("Progress", async () => {
 			vi.spyOn(errorLogger, "log")
