@@ -27,6 +27,7 @@ async function readGitIgnore(
 }
 export class FileWatcher {
 	private watcher: ParcelWatcher.AsyncSubscription | undefined
+	private starting: Promise<void> | undefined
 	private events: Event[]
 	private resolveNext: (() => void) | undefined = undefined
 	private cancelled: boolean = false
@@ -86,6 +87,12 @@ export class FileWatcher {
 		}
 	}
 	async start() {
+		if (this.starting === undefined) {
+			this.starting = this.subscribe()
+		}
+		await this.starting
+	}
+	private async subscribe() {
 		this.logger.info(`Reading gitignore from ${this.root}`)
 		const gitignore = await readGitIgnore(this.logger, this.root)
 		gitignore.push(".git/")
@@ -116,6 +123,8 @@ export class FileWatcher {
 		if (this.poll !== undefined) {
 			await this.poll
 		}
-		await this.watcher?.unsubscribe()
+		const watcher = this.watcher
+		this.watcher = undefined
+		await watcher?.unsubscribe()
 	}
 }
