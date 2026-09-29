@@ -30,7 +30,7 @@ export class App {
     protected readonly logger: Logger,
   ) {
     // keeps track of all the tools we're sending to the MCP
-    this.toolManager = new ToolManager(logger);
+    this.toolManager = new ToolManager(logger, config.toolNames);
     this.workspace = config.workspace ?? "/";
     // keeps track of all the LSP Clients we're using
     this.lspManager = new LspManager(this.buildLsps(config.lsps, logger));
