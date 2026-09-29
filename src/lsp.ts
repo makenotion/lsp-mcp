@@ -28,6 +28,8 @@ export interface LspClient {
   openFileContents(uri: string, contents?: string): Promise<void>;
   registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
   getDiagnostics(file: string): Promise<protocol.Diagnostic[]>;
+  supportsWorkspaceDiagnostics(): boolean;
+  getWorkspaceDiagnostics(): Promise<protocol.Diagnostic[]>;
 }
 
 export class LspClientImpl implements LspClient {
@@ -553,6 +555,24 @@ export class LspClientImpl implements LspClient {
     // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
     await this.waitForProgress()
     return this.attachFileName(await this.files[uri].resolvedDiagnostics, file)
+  }
+  public supportsWorkspaceDiagnostics(): boolean {
+    return this.capabilities?.diagnosticProvider?.workspaceDiagnostics === true
+  }
+
+  public async getWorkspaceDiagnostics(): Promise<protocol.Diagnostic[]> {
+    await this.ensureStarted()
+    this.assertStarted()
+    if (!this.supportsWorkspaceDiagnostics()) {
+      return []
+    }
+    const result = await this.connection.sendRequest(protocol.WorkspaceDiagnosticRequest.type, {
+      identifier: this.capabilities?.diagnosticProvider?.identifier,
+      previousResultIds: [],
+    })
+    return result.items.flatMap((item) =>
+      item.kind === "full" ? this.attachFileName(item.items, item.uri) : []
+    )
   }
   queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
     if (this.capabilities?.diagnosticProvider !== undefined) {
