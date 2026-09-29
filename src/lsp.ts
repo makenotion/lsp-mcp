@@ -28,7 +28,7 @@ export interface LspClient {
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents?: string): Promise<void>;
   registerProgress(token?: rpc.ProgressToken, callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken;
-  getDiagnostics(file?: string): Promise<protocol.Diagnostic[]>;
+  getDiagnostics(file: string): Promise<protocol.Diagnostic[]>;
 }
 
 export class LspClientImpl implements LspClient {
@@ -541,31 +541,22 @@ export class LspClientImpl implements LspClient {
   }
 
 
-  public async getDiagnostics(file?: string) {
+  public async getDiagnostics(file: string) {
     await this.ensureStarted()
     this.assertStarted()
-    if (file !== undefined) {
-      file = resolve(file)
-    }
-    // If we're given a specific file, the agent may have called it without modifying it or opening it. This means we need to open it manually.
-    if (file !== undefined) {
-      const uri = pathToFileUri(file)
-      await this.openFileContents(uri)
-      if (this.capabilities?.diagnosticProvider !== undefined) {
-        return this.attachFileName(await this.getPullDiagnostics(uri), file)
-      }
+    file = resolve(file)
+    // The agent may have called this without modifying the file or opening it. This means we need to open it manually.
+    const uri = pathToFileUri(file)
+    await this.openFileContents(uri)
+    if (this.capabilities?.diagnosticProvider !== undefined) {
+      return this.attachFileName(await this.getPullDiagnostics(uri), file)
     }
     // Read all the files that have been opened and send change requests as appropriate.
     await this.checkFiles();
     // Wait for any workDoneProgress requests to complete.
     // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
     await this.waitForProgress()
-    if (file !== undefined) {
-      return this.attachFileName(await this.files[pathToFileUri(file)].resolvedDiagnostics, file)
-    }
-    return (await Promise.all(Object.keys(this.files).map((uri) =>
-      (this.capabilities?.diagnosticProvider !== undefined ? this.getPullDiagnostics(uri) : this.files[uri].resolvedDiagnostics).then((diagnostics) => this.attachFileName(diagnostics, uri))
-    ))).flat()
+    return this.attachFileName(await this.files[uri].resolvedDiagnostics, file)
   }
   queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
     if (this.capabilities?.diagnosticProvider !== undefined) {
