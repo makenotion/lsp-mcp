@@ -338,7 +338,6 @@ export class App {
           this.workspace,
           lspConfig.eagerStartup ?? false,
           lspConfig.waitForConfiguration ?? false,
-          lspConfig.strictDiagnostics ?? false,
           lspConfig.command,
           lspConfig.args,
           flattenJson(lspConfig.settings ?? {}),

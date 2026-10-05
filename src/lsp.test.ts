@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process"
 import { mkdir, rm, writeFile } from "node:fs/promises"
 import { duplexPair } from "node:stream"
-import { v4 as uuid } from "uuid"
 import {
 	afterEach,
 	beforeEach,
@@ -36,31 +35,6 @@ async function sendProgress(
 		message: "finished",
 	})
 }
-async function sendDiagnostics(
-	server_connection: rpc.MessageConnection,
-	uri: string,
-	diagnostics: protocol.Diagnostic[],
-) {
-	const token = uuid()
-	await server_connection.sendRequest(
-		protocol.WorkDoneProgressCreateRequest.type,
-		{ token },
-	)
-	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
-		kind: "begin",
-		title: "starting",
-	})
-	await server_connection.sendNotification(
-		protocol.PublishDiagnosticsNotification.type,
-		{
-			uri,
-			diagnostics,
-		},
-	)
-	await server_connection.sendProgress(protocol.WorkDoneProgress.type, token, {
-		kind: "end",
-	})
-}
 function checkProgress() {
 	expect(errorLogger.log).toHaveBeenCalledWith(
 		'LSP Progress: {\"kind\":\"begin\",\"title\":\"starting\"}',
@@ -72,19 +46,7 @@ function checkProgress() {
 		'LSP Progress: {\"kind\":\"end\",\"message\":\"finished\"}',
 	)
 }
-describe.each([
-	{
-		name: "(Strict Diagnostics)",
-		strict_diagnostics: true,
-		pullDiagnostics: false,
-	},
-	{ name: "", strict_diagnostics: false, pullDiagnostics: false },
-	{
-		name: "(Pull Diagnostics)",
-		strict_diagnostics: false,
-		pullDiagnostics: true,
-	},
-])("LSP protocol tests $name", ({ strict_diagnostics, pullDiagnostics }) => {
+describe("LSP protocol tests", () => {
 	let client: LspClientImpl
 
 	let server_connection: rpc.MessageConnection
@@ -133,7 +95,6 @@ describe.each([
 			WORKSPACE,
 			true,
 			false,
-			strict_diagnostics,
 			"",
 			[],
 			flattenJson(SETTINGS),
@@ -247,23 +208,14 @@ describe.each([
 			server_connection.onRequest(
 				protocol.InitializeRequest.type,
 				async (_: protocol.InitializeParams) => {
-					if (pullDiagnostics) {
-						return {
-							capabilities: {
-								textDocumentSync: {
-									save: true,
-								},
-								diagnosticProvider: {
-									workspaceDiagnostics: false,
-									interFileDependencies: false,
-								},
-							},
-						}
-					}
 					return {
 						capabilities: {
 							textDocumentSync: {
 								save: true,
+							},
+							diagnosticProvider: {
+								workspaceDiagnostics: false,
+								interFileDependencies: false,
 							},
 						},
 					}
@@ -314,9 +266,6 @@ describe.each([
 						text: OLD_CONTENT,
 					},
 				})
-				if (strict_diagnostics) {
-					await sendDiagnostics(server_connection, URI, [])
-				}
 				await client.openFileContents(URI, NEW_CONTENT)
 				expect(await changed).toEqual({
 					contentChanges: [
@@ -340,33 +289,6 @@ describe.each([
 					text: NEW_CONTENT,
 				})
 			})
-
-			if (strict_diagnostics) {
-				const OLD_CONTENT = "old_content"
-				const NEW_CONTENT = "new_content"
-				const NEW_NEW_CONTENT = "new_new_content"
-				test("Repeated events (harder)", async () => {
-					await client.openFileContents(ABSOLUTE_URI, OLD_CONTENT) // version 1
-					await opened
-					// Schedule 2 calls simultaneously, the first one will acquire the lock
-					const firstCall = client.openFileContents(ABSOLUTE_URI, NEW_CONTENT) //version 2
-					await new Promise<void>(resolve => setTimeout(resolve, 1000))
-					// The second call will be waiting on the old lock
-					const secondCall = client.openFileContents(
-						ABSOLUTE_URI,
-						NEW_NEW_CONTENT,
-					) //version 3
-					await new Promise<void>(resolve => setTimeout(resolve, 1000))
-					// This will release the lock
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-					await changed
-					// Make sure the first call finished
-					await firstCall
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, [])
-					// Make sure the second call finished
-					await secondCall
-				})
-			}
 		})
 		test("Shutdown", async () => {
 			let shutdown = false
@@ -433,46 +355,36 @@ describe.each([
 				)
 				let getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
 				await opened
-				if (pullDiagnostics) {
-					const params = await requestedDiagnostics
-					expect(params).toMatchObject({
-						textDocument: { uri: ABSOLUTE_URI },
-					})
-				} else {
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
-				}
+				const params = await requestedDiagnostics
+				expect(params).toMatchObject({
+					textDocument: { uri: ABSOLUTE_URI },
+				})
 				expect(await getter).toEqual(expectedDiagnostics)
 				// The file needs to be changed to get new diagnostics
 				diagnostics = []
 				await writeFile(FILE_PATH, "testContent2")
 				getter = client.getDiagnostics(ABSOLUTE_FILE_PATH)
 				await changed
-				if (!pullDiagnostics) {
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
-				}
 				expect(await getter).toEqual(diagnostics)
 			}, 10000)
-			test.runIf(pullDiagnostics)(
-				"Diagnostics sync other open files",
-				async () => {
-					const OTHER_PATH = `${WORKSPACE}/other.txt`
-					const OTHER_URI = `file://${process.cwd()}/${OTHER_PATH}`
-					server_connection.onRequest(
-						protocol.DocumentDiagnosticRequest.method,
-						async () => ({ kind: "full", items: [] }),
-					)
-					await writeFile(OTHER_PATH, "old")
-					await writeFile(FILE_PATH, "testContent")
-					await client.openFileContents(OTHER_URI)
-					await opened
-					await writeFile(OTHER_PATH, "new")
-					await client.getDiagnostics(FILE_PATH)
-					expect(await changed).toMatchObject({
-						contentChanges: [{ text: "new" }],
-						textDocument: { uri: OTHER_URI, version: 2 },
-					})
-				},
-			)
+			test("Diagnostics sync other open files", async () => {
+				const OTHER_PATH = `${WORKSPACE}/other.txt`
+				const OTHER_URI = `file://${process.cwd()}/${OTHER_PATH}`
+				server_connection.onRequest(
+					protocol.DocumentDiagnosticRequest.method,
+					async () => ({ kind: "full", items: [] }),
+				)
+				await writeFile(OTHER_PATH, "old")
+				await writeFile(FILE_PATH, "testContent")
+				await client.openFileContents(OTHER_URI)
+				await opened
+				await writeFile(OTHER_PATH, "new")
+				await client.getDiagnostics(FILE_PATH)
+				expect(await changed).toMatchObject({
+					contentChanges: [{ text: "new" }],
+					textDocument: { uri: OTHER_URI, version: 2 },
+				})
+			})
 			test("Diagnostics", async () => {
 				let diagnostics: protocol.Diagnostic[] = [
 					{
@@ -506,26 +418,18 @@ describe.each([
 				await writeFile(FILE_PATH, "testContent")
 				const initial = client.getDiagnostics(FILE_PATH)
 				await opened
-				if (!pullDiagnostics) {
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
-				}
 				expect(await initial).toEqual(expectedDiagnostics)
 				expect(await client.getDiagnostics(ABSOLUTE_FILE_PATH)).toEqual(
 					expectedDiagnostics,
 				)
-				if (pullDiagnostics) {
-					const params = await requestedDiagnostics
-					expect(params).toMatchObject({
-						textDocument: { uri: ABSOLUTE_URI },
-					})
-				}
+				const params = await requestedDiagnostics
+				expect(params).toMatchObject({
+					textDocument: { uri: ABSOLUTE_URI },
+				})
 				diagnostics = []
 				await writeFile(FILE_PATH, "testContent2")
 				const updated = client.getDiagnostics(FILE_PATH)
 				await changed
-				if (!pullDiagnostics) {
-					await sendDiagnostics(server_connection, ABSOLUTE_URI, diagnostics)
-				}
 				expect(await updated).toEqual(diagnostics)
 			}, 10000)
 		})
