@@ -8,7 +8,6 @@ import { v4 as uuid } from 'uuid';
 import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
 import { convertLspToMcp } from "./progress";
 import { readFile } from "fs/promises";
-import { FileWatcher } from "./FileWatcher";
 import { setTimeout } from "timers/promises";
 import { Mutex } from "async-mutex";
 import { fileUriToPath, pathToFileUri } from "./lsp-methods";
@@ -49,7 +48,6 @@ export class LspClientImpl implements LspClient {
     };
   };
   private previousDiagnostics: Map<string, protocol.Diagnostic[]>
-  private fileWatcher: FileWatcher;
   private started: Promise<void> | undefined = undefined
   private readonly locks: Map<string, Mutex>
   public constructor(
@@ -72,7 +70,6 @@ export class LspClientImpl implements LspClient {
     this.pendingProgress = new Map();
     this.locks = new Map()
     this.previousDiagnostics = new Map();
-    this.fileWatcher = new FileWatcher(extensions, this.workspace, this.logger, (uri) => this.openFileContents(uri), (uri) => this.sendDidClose(uri), (uri) => this.openFileContents(uri));
   }
   async spawnChildProcess(): Promise<{
     connection: rpc.MessageConnection;
@@ -269,7 +266,6 @@ export class LspClientImpl implements LspClient {
     if (this.waitForConfiguration) {
       await configured;
     }
-    await this.fileWatcher.start()
     startedResolve()
   }
 
@@ -548,11 +544,11 @@ export class LspClientImpl implements LspClient {
     // The agent may have called this without modifying the file or opening it. This means we need to open it manually.
     const uri = pathToFileUri(file)
     await this.openFileContents(uri)
+    // Open files take precedence over disk in the LSP, so sync any that changed since they were opened.
+    await this.checkFiles();
     if (this.capabilities?.diagnosticProvider !== undefined) {
       return this.attachFileName(await this.getPullDiagnostics(uri), file)
     }
-    // Read all the files that have been opened and send change requests as appropriate.
-    await this.checkFiles();
     // Wait for any workDoneProgress requests to complete.
     // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
     await this.waitForProgress()
@@ -590,7 +586,6 @@ export class LspClientImpl implements LspClient {
   }
   async dispose() {
     try {
-      await this.fileWatcher.dispose()
       await this.connection?.sendRequest(protocol.ShutdownRequest.type)
       this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
       this.connection?.dispose();
