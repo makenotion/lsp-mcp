@@ -13,10 +13,12 @@ export interface Tool {
 export class ToolManager {
   private toolsById: Map<string, Tool> = new Map();
 
-  constructor(private readonly logger: Logger) { }
+  // toolNames maps default tool names to the names they're exposed as
+  constructor(private readonly logger: Logger, private readonly toolNames: Record<string, string> = {}) { }
 
   public registerTool(tool: Tool): void {
-    this.toolsById.set(tool.id, tool);
+    const id = this.toolNames[tool.id] ?? tool.id;
+    this.toolsById.set(id, { ...tool, id });
   }
 
   public async callTool(id: string, args: Record<string, any>, extra: RequestHandlerExtra<ServerRequest, ServerNotification>): Promise<string> {
