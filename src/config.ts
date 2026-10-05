@@ -18,7 +18,6 @@ const ConfigSchema = z.object({
       settings: z.optional(z.record(jsonSchema)),
       eagerStartup: z.optional(z.boolean(), { description: "Start language when the MCP is initialized" }),
       waitForConfiguration: z.optional(z.boolean(), { description: "Wait for the server to request configuration before starting" }),
-      strictDiagnostics: z.optional(z.boolean(), { description: "Wait for diagnostics to be reported for every file." }),
     }),
   ),
   methods: z.optional(z.array(z.string()), {

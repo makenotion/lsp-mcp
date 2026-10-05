@@ -8,7 +8,6 @@ import { v4 as uuid } from 'uuid';
 import { ProgressNotification } from "@modelcontextprotocol/sdk/types.js";
 import { convertLspToMcp } from "./progress";
 import { readFile } from "fs/promises";
-import { setTimeout } from "timers/promises";
 import { Mutex } from "async-mutex";
 import { fileUriToPath, pathToFileUri } from "./lsp-methods";
 import path, { resolve } from "path";
@@ -31,7 +30,6 @@ export interface LspClient {
 }
 
 export class LspClientImpl implements LspClient {
-  private pendingProgress: Map<rpc.ProgressToken, Promise<void>>;
   protected childProcess: ChildProcess | undefined;
 
   protected connection: rpc.MessageConnection | undefined;
@@ -41,8 +39,6 @@ export class LspClientImpl implements LspClient {
     [_: string]: {
       content: string;
       version: number;
-      reportDiagnostics: ((_: protocol.Diagnostic[]) => void),
-      resolvedDiagnostics: Promise<protocol.Diagnostic[]>,
       previousDiagnosticId?: string
       diagnosticId?: string
     };
@@ -57,7 +53,6 @@ export class LspClientImpl implements LspClient {
     public readonly workspace: string,
     public readonly eagerStartup: boolean,
     private readonly waitForConfiguration: boolean,
-    private readonly strictDiagnostics: boolean,
     private readonly command: string,
     private readonly args: string[],
     private readonly settings: object,
@@ -67,7 +62,6 @@ export class LspClientImpl implements LspClient {
   ) {
     this.capabilities = undefined;
     this.files = {};
-    this.pendingProgress = new Map();
     this.locks = new Map()
     this.previousDiagnostics = new Map();
   }
@@ -138,10 +132,6 @@ export class LspClientImpl implements LspClient {
         this.logger.log(`LSP: ${message}`);
       },
     );
-    connection.onNotification(
-      protocol.PublishDiagnosticsNotification.type,
-      (notification) => { this.handleDiagnostics(notification) },
-    );
     connection.onRequest(
       protocol.ShowDocumentRequest.type,
       (
@@ -205,15 +195,6 @@ export class LspClientImpl implements LspClient {
         synchronization: {
           dynamicRegistration: true,
           didSave: true,
-        },
-        publishDiagnostics: {
-          tagSupport: {
-            valueSet: Object.values(protocol.DiagnosticTag),
-          },
-          versionSupport: true,
-          relatedInformation: true,
-          dataSupport: true,
-          codeDescriptionSupport: true,
         },
         completion: {
           completionItem: {
@@ -293,32 +274,17 @@ export class LspClientImpl implements LspClient {
   }
 
   registerProgress(token: rpc.ProgressToken = uuid(), callback?: (params: ProgressNotification) => Promise<void>): rpc.ProgressToken {
-    const pending = new Promise<void>((resolve) => {
-      if (this.connection) {
-        this.connection.onProgress(
-          protocol.WorkDoneProgress.type,
-          token,
-          async (message) => {
-            this.logger.log(`LSP Progress: ${JSON.stringify(message)}`);
-            if (callback) {
-              let params = convertLspToMcp(message, token)
-              await callback(params);
-            }
-            switch (message.kind) {
-              case "begin":
-                this.pendingProgress.set(token, pending);
-                break
-              case "end":
-                resolve()
-                this.pendingProgress.delete(token);
-                break
-
-            }
-          },
-        );
-      }
-    }
-    )
+    this.connection?.onProgress(
+      protocol.WorkDoneProgress.type,
+      token,
+      async (message) => {
+        this.logger.log(`LSP Progress: ${JSON.stringify(message)}`);
+        if (callback) {
+          let params = convertLspToMcp(message, token)
+          await callback(params);
+        }
+      },
+    );
 
     return token
   }
@@ -393,8 +359,7 @@ export class LspClientImpl implements LspClient {
 
   }
   updateFileEntry(uri: string, version: number, contents: string, previousDiagnosticId?: string): string {
-    const { promise: resolvedDiagnostics, resolve: reportDiagnostics, reject: _ } = Promise.withResolvers<protocol.Diagnostic[]>()
-    this.files[uri] = { content: contents, version, resolvedDiagnostics, reportDiagnostics, previousDiagnosticId, diagnosticId: undefined };
+    this.files[uri] = { content: contents, version, previousDiagnosticId, diagnosticId: undefined };
     return contents
 
   }
@@ -422,43 +387,7 @@ export class LspClientImpl implements LspClient {
       // Case 2: We can lock the file to ensure only one update happens at a time.
       await lock.acquire()
       try {
-        // If many updates are happening quickly to the same file, we want to read the latest version of the file. Say 3 updates happen in quick succession:
-        // 1 to contents A
-        // 2 to contents B
-        // 3 to contents C
-        //
-        // We execute the first request and are now waiting on the language server. Since we call await, the other 2 requests, will read their files.
-        //
-        // 1 to contents A  (pending)
-        // 2 to contents B (blocked)
-        // 3 to contents C (blocked)
-        //
-        // When it finishes, we may execute 2 or 3 without knowing which one. By re-reading the file here, we ensure that one is run with the latest contents and the other is skipped.
-        //
-        //
-        // Since this lock is per-file, this shouldn't impact the performance of edits across multiple files.
-        // High-stress cases are:
-        // a. Repeated edits to 1 file.
-        // b. Edits to multiple files.
-        //
-        // In case a:
-        // If we have N edits, the first edit will open the document and get diagnostics.
-        // Since we aren't I/O bound with the filesystem, by the time we have a response, the filesystem will have the contents of the Nth request on disk.
-        // This means that the second request (regardless of which one it is) will wait for the diagnostics of the first file and then read the file belonging to the last edit.
-        // Then the 3rd request would wait for the diagnostics of the second request and then no-op since the file hasn't changed.
-        // All subsequent requests will return instantly since they don't need to wait for the diagnostics.
-        // Even if the second request doesn't match the Nth request, the 3rd request will.
-        // Basically we have a bounded amount of delay that can be introduced here since eventually the agent will request diagnostics and it will need to wait for the file to be updated.
-        //
-        // In case b:
-        // We don't lock the entire map, just each file
-        // This means all the requests will occur in parallel (though in practice, we'll get diagnostics for all of them around the same time).
-        // Individually, they'll follow the same characteristics of case a.
-        // They can still block the event loop so the priority should be to maximize async I/O and minimize blocking.
-        // This is currently a problem when doing a git pull.
-        if (this.strictDiagnostics) {
-          await this.files[uri].resolvedDiagnostics
-        }
+        // Re-read the file under the lock so that concurrent updates converge on the latest contents.
         if (contents === undefined) {
           try {
             contents = await readFile(fileUriToPath(uri), "utf-8")
@@ -489,9 +418,6 @@ export class LspClientImpl implements LspClient {
     await Promise.all(Object.keys(this.files).map(async (uri) => {
       await this.openFileContents(uri)
     }))
-  }
-  async waitForProgress() {
-    await Promise.all(this.pendingProgress.values())
   }
   async getPullDiagnostics(uri: string): Promise<protocol.Diagnostic[]> {
     await this.ensureStarted()
@@ -546,43 +472,10 @@ export class LspClientImpl implements LspClient {
     await this.openFileContents(uri)
     // Open files take precedence over disk in the LSP, so sync any that changed since they were opened.
     await this.checkFiles();
-    if (this.capabilities?.diagnosticProvider !== undefined) {
-      return this.attachFileName(await this.getPullDiagnostics(uri), file)
+    if (this.capabilities?.diagnosticProvider === undefined) {
+      throw new Error(`LSP ${this.id} doesn't support pull diagnostics`)
     }
-    // Wait for any workDoneProgress requests to complete.
-    // This indicates reindexing - so even if we're reindexing the entire project we will wait for it
-    await this.waitForProgress()
-    return this.attachFileName(await this.files[uri].resolvedDiagnostics, file)
-  }
-  queueAllDiagnostics(diagnostics: protocol.Diagnostic[], delay: number): void {
-    if (this.capabilities?.diagnosticProvider !== undefined) {
-      // Since this is hack for push diagnostics, we don't need to set these timeouts for pull diagnostics
-      return
-    }
-    for (const file in this.files) {
-      const old = this.files[file].resolvedDiagnostics
-      this.files[file].resolvedDiagnostics = Promise.race([old, setTimeout(delay).then(() => {
-        this.logger.warn(`LSP: Diagnostics timed out for ${file}`)
-        this.files[file].reportDiagnostics(diagnostics)
-        return diagnostics
-      })])
-    }
-  }
-  handleDiagnostics(notification: protocol.PublishDiagnosticsParams): void {
-    if (notification.uri in this.files) {
-      this.logger.log(`LSP: Recieved Diagnostics for file ${notification.uri}`);
-      if (notification.version && notification.version !== this.files[notification.uri].version) {
-        this.logger.warn("Rejecting outdated diagnostics for " + notification.uri)
-        return
-      }
-      this.files[notification.uri].reportDiagnostics(notification.diagnostics)
-      this.queueAllDiagnostics([], 10000) // Wait  10 seconds. Sometimes vtsls will only send diagnostics for files with errors when diagnostics are requested for multiple files
-    } else {
-      this.logger.info("LSP: Recieved diagnostics for file wasn't opened " + notification.uri)
-      // There is a condition where we may open files A and B, but the LSP may report diagnostics for B and C.
-      // To handle this, if we get an unknown file, we will wait for diagnostics to be reported on it. But if they aren't within 3000ms, we can use the file C diagnostics as a default.
-      this.queueAllDiagnostics(notification.diagnostics, 3000)
-    }
+    return this.attachFileName(await this.getPullDiagnostics(uri), file)
   }
   async dispose() {
     try {
