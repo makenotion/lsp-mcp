@@ -104,13 +104,13 @@ export class App {
     });
     this.toolManager.registerTool({
       id: "get_diagnostics",
-      description: "Get errors for a file/opened files in the project",
+      description: "Get errors for a file",
       inputSchema: {
         type: "object" as "object",
         properties: {
           file: {
             type: "string",
-            description: "The specific file to get diagnostics for. If not specified, will get diagnostics for all modified files.",
+            description: "The file to get diagnostics for.",
           },
           page: {
             type: "integer",
@@ -118,13 +118,16 @@ export class App {
             description: "Specifies which page of results to retrieve when there are more results than can fit in a single response. The first page is 0 and is the default.",
           },
         },
-        required: []
+        required: ["file"]
       },
       handler: async (args) => {
+        if (typeof args?.file !== "string") {
+          throw new Error("The file argument is required");
+        }
         // Wait for 5 minutes
         const requests = this.lspManager.getLsps().map((lsp) =>
           Promise.race([
-            lsp.getDiagnostics(args?.file),
+            lsp.getDiagnostics(args.file),
             new Promise<Diagnostic[]>((resolve) => {
               setTimeout(() => {
                 this.logger.error("Getting diagnostics timed out, returning empty result");
