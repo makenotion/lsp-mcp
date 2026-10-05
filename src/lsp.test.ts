@@ -290,6 +290,30 @@ describe("LSP protocol tests", () => {
 				})
 			})
 		})
+		test("Requests sync other open files", async () => {
+			const OTHER_PATH = `${WORKSPACE}/other.txt`
+			const OTHER_URI = `file://${process.cwd()}/${OTHER_PATH}`
+			const events: string[] = []
+			server_connection.onNotification(
+				protocol.DidChangeTextDocumentNotification.type,
+				() => {
+					events.push("didChange")
+				},
+			)
+			server_connection.onRequest(protocol.HoverRequest.type, () => {
+				events.push("hover")
+				return null
+			})
+			await writeFile(OTHER_PATH, "old")
+			await client.openFileContents(OTHER_URI)
+			await opened
+			await writeFile(OTHER_PATH, "new")
+			await client.sendRequest(protocol.HoverRequest.method, {
+				textDocument: { uri: URI },
+				position: { line: 0, character: 0 },
+			})
+			expect(events).toEqual(["didChange", "hover"])
+		})
 		test("Shutdown", async () => {
 			let shutdown = false
 			server_connection.onRequest(protocol.ShutdownRequest.type, async () => {
