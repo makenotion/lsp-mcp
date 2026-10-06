@@ -269,6 +269,8 @@ export class LspClientImpl implements LspClient {
     await this.ensureStarted()
 
     this.assertStarted();
+    // Open files take precedence over disk in the LSP, so sync any that changed since they were opened.
+    await this.checkFiles();
 
     return await this.connection.sendRequest(method, args);
   }
