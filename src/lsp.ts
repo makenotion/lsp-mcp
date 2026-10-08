@@ -45,6 +45,7 @@ export class LspClientImpl implements LspClient {
   };
   private previousDiagnostics: Map<string, protocol.Diagnostic[]>
   private started: Promise<void> | undefined = undefined
+  private startedReject: ((reason: Error) => void) | undefined = undefined
   private readonly locks: Map<string, Mutex>
   public constructor(
     public readonly id: string,
@@ -87,13 +88,16 @@ export class LspClientImpl implements LspClient {
     return { connection, childProcess };
   }
   public async start() {
-    let { promise: started, resolve: startedResolve, reject: _ } = Promise.withResolvers<void>()
+    let { promise: started, resolve: startedResolve, reject: startedReject } = Promise.withResolvers<void>()
     this.started = started
+    this.startedReject = startedReject
     // TODO: This should return a promise if the LSP is still starting
     // Just don't call start() twice and it'll be fine :)
     if (this.isStarted()) {
       return;
     }
+    // Avoid an unhandled rejection if the server dies before anyone awaits this.
+    started.catch(() => {})
     const { connection, childProcess } = await this.spawnChildProcess();
     this.connection = connection;
     connection.onError((error) => {
@@ -104,6 +108,7 @@ export class LspClientImpl implements LspClient {
     connection.onClose(() => {
       this.logger.log("Connection closed");
       childProcess.kill();
+      this.handleConnectionLost(connection);
     });
     const configured = new Promise<void>((resolve) => {
       connection.onRequest(
@@ -252,6 +257,22 @@ export class LspClientImpl implements LspClient {
 
   public isStarted(): this is LspClientImpl & { connection: rpc.MessageConnection } {
     return !!this.connection;
+  }
+
+  // The server was killed or crashed. Forget it so the next request respawns it.
+  private handleConnectionLost(connection: rpc.MessageConnection) {
+    if (this.connection !== connection) {
+      return;
+    }
+    this.connection = undefined;
+    this.childProcess = undefined;
+    this.capabilities = undefined;
+    this.started = undefined;
+    this.startedReject?.(new Error("Language server connection closed"));
+    this.startedReject = undefined;
+    for (const uri of Object.keys(this.files)) {
+      delete this.files[uri];
+    }
   }
 
   private assertStarted(): asserts this is LspClientImpl & { connection: rpc.MessageConnection } {
