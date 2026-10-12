@@ -14,7 +14,7 @@ import * as rpc from "vscode-jsonrpc"
 import { StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
 import * as protocol from "vscode-languageserver-protocol"
 import { errorLogger } from "./logger"
-import { LspClientImpl } from "./lsp"
+import { LspClientImpl, languageIdForUri } from "./lsp"
 import { flattenJson } from "./utils"
 import { PACKAGE_NAME, PACKAGE_VERSION } from "./version"
 
@@ -46,6 +46,24 @@ function checkProgress() {
 		'LSP Progress: {\"kind\":\"end\",\"message\":\"finished\"}',
 	)
 }
+describe("languageIdForUri", () => {
+	test.each([
+		["file:///repo/a.ts", "typescript"],
+		["file:///repo/a.d.ts", "typescript"],
+		["file:///repo/a.mts", "typescript"],
+		["file:///repo/a.cts", "typescript"],
+		["file:///repo/a.tsx", "typescriptreact"],
+		["file:///repo/a.js", "javascript"],
+		["file:///repo/a.mjs", "javascript"],
+		["file:///repo/a.cjs", "javascript"],
+		["file:///repo/a.jsx", "javascriptreact"],
+		["file:///repo/A.TS", "typescript"],
+		["file:///repo/file.txt", "typescriptreact"],
+	])("%s -> %s", (uri, expected) => {
+		expect(languageIdForUri(uri)).toBe(expected)
+	})
+})
+
 describe("LSP protocol tests", () => {
 	let client: LspClientImpl
 

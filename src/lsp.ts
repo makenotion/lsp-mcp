@@ -13,6 +13,26 @@ import { fileUriToPath, pathToFileUri } from "./lsp-methods";
 import path, { resolve } from "path";
 import { buildClientInfo } from "./version";
 
+const LANGUAGE_IDS_BY_EXTENSION: Record<string, string> = {
+  ".ts": "typescript",
+  ".mts": "typescript",
+  ".cts": "typescript",
+  ".tsx": "typescriptreact",
+  ".js": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".jsx": "javascriptreact",
+};
+
+// The language server uses languageId to pick the script kind, so opening a
+// .ts file as typescriptreact parses `<T>(...) =>` generics as JSX.
+export function languageIdForUri(uri: string): string {
+  return (
+    LANGUAGE_IDS_BY_EXTENSION[path.extname(uri).toLowerCase()] ??
+    "typescriptreact"
+  );
+}
+
 export interface LspClient {
   id: string;
   languages: string[];
@@ -337,7 +357,7 @@ export class LspClientImpl implements LspClient {
       {
         textDocument: {
           uri: uri,
-          languageId: "typescriptreact",
+          languageId: languageIdForUri(uri),
           version: 1,
           text: contents,
         },
