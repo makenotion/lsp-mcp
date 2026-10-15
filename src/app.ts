@@ -18,12 +18,17 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { promises as stream } from "node:stream"
 import type { Diagnostic } from "vscode-languageserver-protocol";
 import { buildClientInfo } from "./version";
+import os from "node:os";
+
+const EXIT_FALLBACK_MS = 1_000;
+
 export class App {
   private readonly toolManager: ToolManager;
   private readonly lspManager: LspManager;
   private readonly mcp: McpServer;
   private readonly availableMethodIds: Promise<LSPMethods[]>;
   private readonly workspace: string;
+  private disposed: Promise<void> | undefined;
 
   constructor(
     private readonly config: Config,
@@ -40,10 +45,24 @@ export class App {
     this.availableMethodIds = getLspMethods(config.methods);
 
 
-    // Cleanup on any signal
-    process.on('SIGINT', () => this.dispose());
-    process.on('SIGTERM', () => this.dispose());
-    process.on('exit', () => this.dispose());
+    // Shut the language servers down on a signal, then let the process end.
+    // Listening for a signal turns off node's default of exiting on it, so the
+    // fallback timer exits if something else keeps the event loop alive. It is
+    // unref'd so it never holds the process open itself, and its delay lets an
+    // embedder's own cleanup, such as flushing telemetry, finish first.
+    for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+      process.once(signal, () => {
+        void this.dispose().finally(() => {
+          setTimeout(() => process.exit(128 + os.constants.signals[signal]), EXIT_FALLBACK_MS).unref();
+        });
+      });
+    }
+    // process.exit skips async cleanup, so at least signal the servers.
+    process.on('exit', () => {
+      for (const lsp of this.lspManager.getLsps()) {
+        lsp.kill();
+      }
+    });
   }
 
   private async initializeMcp() {
@@ -283,7 +302,12 @@ export class App {
     await this.dispose()
   }
 
-  public async dispose() {
+  public dispose(): Promise<void> {
+    this.disposed ??= this.disposeOnce();
+    return this.disposed;
+  }
+
+  private async disposeOnce() {
     this.logger.info("Shutting down...");
     if (this.lspManager !== undefined) {
       for (const lsp of this.lspManager.getLsps()) {
