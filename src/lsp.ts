@@ -33,6 +33,12 @@ export function languageIdForUri(uri: string): string {
   );
 }
 
+// How long dispose() waits for the server to answer `shutdown`, and then to
+// exit after SIGTERM, before moving on. A wedged server answers neither, and
+// waiting on it would keep this process, and the server, alive forever.
+const SHUTDOWN_TIMEOUT_MS = 2_000;
+const KILL_GRACE_MS = 2_000;
+
 export interface LspClient {
   id: string;
   languages: string[];
@@ -42,6 +48,8 @@ export interface LspClient {
   start(): Promise<void>;
   isStarted(): boolean;
   dispose: () => Promise<void>;
+  /** Signals the server's process group without waiting, for exit paths that can't await. */
+  kill(): void;
   sendRequest(method: string, args: any): Promise<any>;
   sendNotification(method: string, args: any): Promise<void>;
   openFileContents(uri: string, contents?: string): Promise<void>;
@@ -90,7 +98,11 @@ export class LspClientImpl implements LspClient {
     connection: rpc.MessageConnection;
     childProcess: ChildProcess;
   }> {
-    const childProcess = (this.childProcess = spawn(this.command, this.args));
+    // In its own process group, so killing the group also reaches the wrappers
+    // and grandchildren the command starts, not just the direct child.
+    const childProcess = (this.childProcess = spawn(this.command, this.args, {
+      detached: process.platform !== "win32",
+    }));
 
     if (!childProcess.stdout || !childProcess.stdin) {
       throw new Error("Child process not started");
@@ -120,14 +132,15 @@ export class LspClientImpl implements LspClient {
     started.catch(() => {})
     const { connection, childProcess } = await this.spawnChildProcess();
     this.connection = connection;
+    this.childProcess = childProcess;
     connection.onError((error) => {
       this.logger.error(`Connection error: ${error}`);
-      childProcess.kill();
+      signalProcessGroup(childProcess, "SIGTERM");
     });
 
     connection.onClose(() => {
       this.logger.log("Connection closed");
-      childProcess.kill();
+      signalProcessGroup(childProcess, "SIGTERM");
       this.handleConnectionLost(connection);
     });
     const configured = new Promise<void>((resolve) => {
@@ -521,13 +534,72 @@ export class LspClientImpl implements LspClient {
     return this.attachFileName(await this.getPullDiagnostics(uri), file)
   }
   async dispose() {
+    const { connection, childProcess } = this;
     try {
-      await this.connection?.sendRequest(protocol.ShutdownRequest.type)
-      this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
-      this.connection?.dispose();
-      this.childProcess?.kill();
+      if (connection !== undefined) {
+        await withTimeout(
+          connection.sendRequest(protocol.ShutdownRequest.type),
+          SHUTDOWN_TIMEOUT_MS,
+          "Language server did not answer shutdown",
+        );
+      }
     } catch (e: any) {
       this.logger.error(e.toString?.());
     }
+    this.logger.log(`LSP: Killing ${this.command} ${this.args}`);
+    connection?.dispose();
+    if (childProcess !== undefined) {
+      await terminateProcessGroup(childProcess);
+    }
   }
+
+  kill() {
+    if (this.childProcess !== undefined) {
+      signalProcessGroup(this.childProcess, "SIGTERM");
+    }
+  }
+}
+
+/**
+ * SIGTERMs the child's process group, waits up to KILL_GRACE_MS for the child
+ * to exit, then SIGKILLs the group to take down anything still in it.
+ */
+async function terminateProcessGroup(childProcess: ChildProcess) {
+  const exited = new Promise<void>((resolve) => {
+    if (childProcess.exitCode !== null || childProcess.signalCode !== null) {
+      resolve();
+    } else {
+      childProcess.once("exit", () => resolve());
+    }
+  });
+  signalProcessGroup(childProcess, "SIGTERM");
+  await withTimeout(exited, KILL_GRACE_MS, "").catch(() => {});
+  signalProcessGroup(childProcess, "SIGKILL");
+}
+
+function signalProcessGroup(childProcess: ChildProcess, signal: NodeJS.Signals) {
+  if (childProcess.pid === undefined) {
+    return;
+  }
+  try {
+    if (process.platform === "win32") {
+      childProcess.kill(signal);
+    } else {
+      process.kill(-childProcess.pid, signal);
+    }
+  } catch (e: any) {
+    // The group has already exited: ESRCH, or on macOS EPERM while its only
+    // members are zombies not yet reaped.
+    if (e?.code !== "ESRCH" && e?.code !== "EPERM") {
+      throw e;
+    }
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }

@@ -46,6 +46,14 @@ function checkProgress() {
 		'LSP Progress: {\"kind\":\"end\",\"message\":\"finished\"}',
 	)
 }
+function isRunning(pid: number): boolean {
+	try {
+		process.kill(pid, 0)
+		return true
+	} catch {
+		return false
+	}
+}
 describe("languageIdForUri", () => {
 	test.each([
 		["file:///repo/a.ts", "typescript"],
@@ -165,6 +173,69 @@ describe("LSP protocol tests", () => {
 		expect(mockSpawn).toBeCalledTimes(1)
 		await initialized
 	})
+	test("Shutdown kills a server that ignores shutdown and SIGTERM", async () => {
+		// Spawned the way spawnChildProcess does, with a grandchild, and both
+		// ignore SIGTERM: a wedged server behind a wrapper.
+		const stubborn =
+			"process.on('SIGTERM', () => {}); setInterval(() => {}, 1e9)"
+		const server = spawn(
+			process.execPath,
+			[
+				"-e",
+				`${stubborn}; const c = require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(stubborn)}], { stdio: "ignore" }); console.log(c.pid)`,
+			],
+			{ detached: true },
+		)
+		const serverPid = server.pid
+		if (serverPid === undefined) {
+			throw new Error("Server did not start")
+		}
+		const grandchildPid = await new Promise<number>(resolve => {
+			server.stdout.once("data", data => resolve(Number(String(data).trim())))
+		})
+		mockSpawn.mockImplementationOnce(async () => {
+			const [pair_c_read, pair_c_write] = duplexPair()
+			const [pair_d_read, pair_d_write] = duplexPair()
+			const wedged_server_connection = rpc.createMessageConnection(
+				new StreamMessageReader(pair_d_read),
+				new StreamMessageWriter(pair_c_write),
+			)
+			wedged_server_connection.onRequest(
+				protocol.InitializeRequest.type,
+				async () => ({ capabilities: {} }),
+			)
+			wedged_server_connection.onNotification(
+				protocol.InitializedNotification.type,
+				async () => {},
+			)
+			wedged_server_connection.onRequest(
+				protocol.ShutdownRequest.type,
+				() => new Promise<never>(() => {}),
+			)
+			wedged_server_connection.listen()
+			return {
+				connection: rpc.createMessageConnection(
+					new StreamMessageReader(pair_c_read),
+					new StreamMessageWriter(pair_d_write),
+				),
+				childProcess: server,
+			}
+		})
+		try {
+			await client.start()
+			await client.dispose()
+			// The server is our child, so it lingers as a zombie until node reaps
+			// it; its exit status says it is gone.
+			await vi.waitFor(() => expect(server.signalCode).toBe("SIGKILL"))
+			await vi.waitFor(() => expect(isRunning(grandchildPid)).toBe(false))
+		} finally {
+			for (const pid of [serverPid, grandchildPid]) {
+				if (isRunning(pid)) {
+					process.kill(pid, "SIGKILL")
+				}
+			}
+		}
+	}, 15_000)
 	test("Configuration Support", async () => {
 		server_connection.onRequest(
 			protocol.InitializeRequest.type,
