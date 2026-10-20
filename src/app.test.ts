@@ -53,9 +53,9 @@ describe("getDiagnosticsWithTimeout", () => {
 			},
 		}
 
-		await expect(getDiagnosticsWithTimeout(lsp, "a.ts", logger)).rejects.toThrow(
-			"Connection is closed.",
-		)
+		await expect(
+			getDiagnosticsWithTimeout(lsp, "a.ts", logger),
+		).rejects.toThrow("Connection is closed.")
 		expect(vi.getTimerCount()).toBe(0)
 	})
 })
