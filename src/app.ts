@@ -21,6 +21,31 @@ import { buildClientInfo } from "./version";
 import os from "node:os";
 
 const EXIT_FALLBACK_MS = 1_000;
+export const DIAGNOSTICS_TIMEOUT_MS = 300_000;
+
+/**
+ * Get a file's diagnostics, or an empty result if the server takes longer than
+ * DIAGNOSTICS_TIMEOUT_MS. The timer is cleared once the request settles so a
+ * fast response doesn't still log a timeout five minutes later.
+ */
+export async function getDiagnosticsWithTimeout(
+  lsp: Pick<LspClient, "getDiagnostics">,
+  file: string,
+  logger: Logger,
+): Promise<Diagnostic[]> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<Diagnostic[]>((resolve) => {
+    timer = setTimeout(() => {
+      logger.error("Getting diagnostics timed out, returning empty result");
+      resolve([]);
+    }, DIAGNOSTICS_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([lsp.getDiagnostics(file), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export class App {
   private readonly toolManager: ToolManager;
@@ -143,17 +168,8 @@ export class App {
         if (typeof args?.file !== "string") {
           throw new Error("The file argument is required");
         }
-        // Wait for 5 minutes
         const requests = this.lspManager.getLsps().map((lsp) =>
-          Promise.race([
-            lsp.getDiagnostics(args.file),
-            new Promise<Diagnostic[]>((resolve) => {
-              setTimeout(() => {
-                this.logger.error("Getting diagnostics timed out, returning empty result");
-                resolve([])
-              }, 300000)
-            })
-          ])
+          getDiagnosticsWithTimeout(lsp, args.file, this.logger)
         )
         const diagnostics = (await Promise.all(requests)).flat()
         return paginateResponse(diagnostics, args?.page ?? 0, 100)
