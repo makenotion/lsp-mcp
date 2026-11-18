@@ -126,9 +126,9 @@ Follow the instructions for Claude but the config file is located in `~/.llm/con
 * [multilspy](https://github.com/microsoft/multilspy) - LSP Python Client Library
 ## Development
 ```bash
-yarn
-yarn mcp-cli # Interactive MCP tool to help with development
-yarn dev --help # Get the CLI help
+npm install
+npm run mcp-cli # Interactive MCP tool to help with development
+npm run dev -- --help # Get the CLI help
 ```
 ### Dependencies
 ### Decisions

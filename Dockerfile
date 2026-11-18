@@ -8,11 +8,11 @@ RUN npm install -g typescript
 WORKDIR /app
 
 COPY package.json .
-COPY yarn.lock .
-RUN yarn install --frozen-lockfile --ignore-scripts
+COPY package-lock.json .
+RUN npm ci --ignore-scripts
 
 COPY . .
-RUN yarn build
+RUN npm run build
 RUN npm prune --omit=dev
 
 COPY dev/prod.config.json /app/dist/config.json

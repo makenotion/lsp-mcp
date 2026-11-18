@@ -14,8 +14,8 @@ jobs:
       - uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3
         with:
           node-version-file: package.json
-          cache: yarn
-      - run: yarn install --frozen-lockfile
+          cache: npm
+      - run: npm ci
       - run: tsc
   lint:
     runs-on: ubuntu-latest
@@ -24,8 +24,8 @@ jobs:
       - uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3
         with:
           node-version-file: package.json
-          cache: yarn
-      - run: yarn install --frozen-lockfile
+          cache: npm
+      - run: npm ci
       - name: Run Biome
         run: npx biome ci .
   test:
@@ -35,6 +35,6 @@ jobs:
       - uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3
         with:
           node-version-file: package.json
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: yarn test
+          cache: npm
+      - run: npm ci
+      - run: npm test
