@@ -16,7 +16,7 @@ jobs:
           node-version-file: package.json
           cache: npm
       - run: npm ci
-      - run: tsc
+      - run: npx tsc
   lint:
     runs-on: ubuntu-latest
     steps:
